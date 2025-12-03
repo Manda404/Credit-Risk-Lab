@@ -1,0 +1,10 @@
+.venv
+data/
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints
+logs/
+poetry.lock
+src/credit_risk_lab/shared/logging_old.py
+.env
