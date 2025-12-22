@@ -20,7 +20,7 @@ Le framework est conçu pour être utilisé en entreprise dans des environnement
 ---
 
 # 📊 Loan Approval Classification Dataset  
-### 🔗 Dataset link: https://www.kaggle.com/datasets/taweilo/loan-approval-classification-data
+### 🔗 [Dataset: Loan Approval Classification](https://www.kaggle.com/datasets/taweilo/loan-approval-classification-data)
 
 ## Dataset Overview
 Ce dataset (synthetic) contient **45 000 instances** et **14 variables** liées au risque crédit et à l’approbation de prêts.  
