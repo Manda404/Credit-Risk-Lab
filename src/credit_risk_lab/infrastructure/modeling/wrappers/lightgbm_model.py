@@ -13,7 +13,8 @@ class LightGBMWrapper(ModelWrapper):
 
     def fit(self, x_train, y_train, x_validation, y_validation):
         self.model.fit(
-            x_train, y_train,
+            x_train,
+            y_train,
             eval_set=[(x_train, y_train), (x_validation, y_validation)],
             eval_names=["train", "validation"],
             eval_metric="binary_logloss",
@@ -31,6 +32,8 @@ class LightGBMWrapper(ModelWrapper):
 
     def predict_proba(self, features):
         """Preserve generated feature names to avoid LightGBM warnings."""
-        if not isinstance(features, pd.DataFrame) and hasattr(self.model, "feature_name_"):
+        if not isinstance(features, pd.DataFrame) and hasattr(
+            self.model, "feature_name_"
+        ):
             features = pd.DataFrame(features, columns=self.model.feature_name_)
         return self.model.predict_proba(features)[:, 1]

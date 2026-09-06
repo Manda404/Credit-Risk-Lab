@@ -29,20 +29,30 @@ def fairness_report(
         values = sensitive[attribute].astype("string").fillna("<missing>")
         for group in values.unique():
             mask = values.eq(group).to_numpy()
-            group_y, group_d, group_p = target[mask], decisions[mask], probabilities[mask]
+            group_y, group_d, group_p = (
+                target[mask],
+                decisions[mask],
+                probabilities[mask],
+            )
             negatives = group_y == 0
-            rows.append({
-                "attribute": attribute,
-                "group": str(group),
-                "rows": int(mask.sum()),
-                "small_group": bool(mask.sum() < min_group_size),
-                "positive_rate": float(group_y.mean()),
-                "selection_rate": float(group_d.mean()),
-                "true_positive_rate": float(recall_score(group_y, group_d, zero_division=0)),
-                "false_positive_rate": float(group_d[negatives].mean()) if negatives.any() else np.nan,
-                "mean_probability": float(group_p.mean()),
-                "observed_rate": float(group_y.mean()),
-                "calibration_gap": float(abs(group_p.mean() - group_y.mean())),
-                "brier": float(brier_score_loss(group_y, group_p)),
-            })
+            rows.append(
+                {
+                    "attribute": attribute,
+                    "group": str(group),
+                    "rows": int(mask.sum()),
+                    "small_group": bool(mask.sum() < min_group_size),
+                    "positive_rate": float(group_y.mean()),
+                    "selection_rate": float(group_d.mean()),
+                    "true_positive_rate": float(
+                        recall_score(group_y, group_d, zero_division=0)
+                    ),
+                    "false_positive_rate": (
+                        float(group_d[negatives].mean()) if negatives.any() else np.nan
+                    ),
+                    "mean_probability": float(group_p.mean()),
+                    "observed_rate": float(group_y.mean()),
+                    "calibration_gap": float(abs(group_p.mean() - group_y.mean())),
+                    "brier": float(brier_score_loss(group_y, group_p)),
+                }
+            )
     return pd.DataFrame(rows)

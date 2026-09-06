@@ -2,7 +2,9 @@ import numpy as np
 import pandas as pd
 
 from credit_risk_lab.infrastructure.evaluation import (
-    calibration_table, classification_metrics, expected_calibration_error,
+    calibration_table,
+    classification_metrics,
+    expected_calibration_error,
     find_optimal_threshold,
     find_cost_sensitive_threshold,
 )
@@ -24,7 +26,17 @@ def test_metrics_and_threshold_are_valid():
     metrics = classification_metrics(target, probabilities, threshold)
     assert 0 <= threshold <= 1
     assert metrics["roc_auc"] == 1.0
-    assert {"accuracy", "precision", "recall", "f1", "log_loss", "brier", "mcc", "cohen_kappa", "ece"}.issubset(metrics)
+    assert {
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "log_loss",
+        "brier",
+        "mcc",
+        "cohen_kappa",
+        "ece",
+    }.issubset(metrics)
     costly_miss_threshold = find_cost_sensitive_threshold(
         target, probabilities, false_positive_cost=1, false_negative_cost=10
     )

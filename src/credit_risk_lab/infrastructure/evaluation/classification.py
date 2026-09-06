@@ -3,9 +3,18 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    accuracy_score, average_precision_score, balanced_accuracy_score,
-    brier_score_loss, cohen_kappa_score, f1_score, log_loss,
-    matthews_corrcoef, precision_score, recall_score, roc_auc_score, roc_curve,
+    accuracy_score,
+    average_precision_score,
+    balanced_accuracy_score,
+    brier_score_loss,
+    cohen_kappa_score,
+    f1_score,
+    log_loss,
+    matthews_corrcoef,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    roc_curve,
 )
 
 
@@ -38,11 +47,16 @@ def find_cost_sensitive_threshold(
         prediction = np.asarray(probabilities) >= threshold
         false_positives = np.sum((prediction == 1) & (target == 0))
         false_negatives = np.sum((prediction == 0) & (target == 1))
-        costs.append(false_positives * false_positive_cost + false_negatives * false_negative_cost)
+        costs.append(
+            false_positives * false_positive_cost
+            + false_negatives * false_negative_cost
+        )
     return float(candidates[int(np.argmin(costs))])
 
 
-def calibration_table(y_true, probabilities: np.ndarray, bins: int = 10) -> pd.DataFrame:
+def calibration_table(
+    y_true, probabilities: np.ndarray, bins: int = 10
+) -> pd.DataFrame:
     """Aggregate confidence and observed frequency into equal-width probability bins.
 
     Empty bins are omitted from the returned table and from the weighted ECE.
@@ -67,19 +81,23 @@ def calibration_table(y_true, probabilities: np.ndarray, bins: int = 10) -> pd.D
             continue
         confidence = float(probabilities[mask].mean())
         observed_rate = float(target[mask].mean())
-        rows.append({
-            "bin": bin_id + 1,
-            "lower_bound": float(edges[bin_id]),
-            "upper_bound": float(edges[bin_id + 1]),
-            "rows": int(mask.sum()),
-            "mean_probability": confidence,
-            "observed_rate": observed_rate,
-            "absolute_gap": abs(observed_rate - confidence),
-        })
+        rows.append(
+            {
+                "bin": bin_id + 1,
+                "lower_bound": float(edges[bin_id]),
+                "upper_bound": float(edges[bin_id + 1]),
+                "rows": int(mask.sum()),
+                "mean_probability": confidence,
+                "observed_rate": observed_rate,
+                "absolute_gap": abs(observed_rate - confidence),
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def expected_calibration_error(y_true, probabilities: np.ndarray, bins: int = 10) -> float:
+def expected_calibration_error(
+    y_true, probabilities: np.ndarray, bins: int = 10
+) -> float:
     """Compute weighted Expected Calibration Error (ECE).
 
     ECE is a useful summary but depends on the binning choice. It must always be
@@ -124,8 +142,14 @@ def decile_table(y_true, probabilities: np.ndarray, bins: int = 10) -> pd.DataFr
     frame = pd.DataFrame({"target": np.asarray(y_true), "probability": probabilities})
     frame = frame.sort_values("probability", ascending=False).reset_index(drop=True)
     frame["decile"] = pd.qcut(frame.index, q=bins, labels=range(1, bins + 1))
-    grouped = frame.groupby("decile", observed=True).agg(rows=("target", "size"), positives=("target", "sum"), average_score=("probability", "mean"))
+    grouped = frame.groupby("decile", observed=True).agg(
+        rows=("target", "size"),
+        positives=("target", "sum"),
+        average_score=("probability", "mean"),
+    )
     grouped["positive_rate"] = grouped["positives"] / grouped["rows"]
     grouped["lift"] = grouped["positive_rate"] / frame["target"].mean()
-    grouped["cumulative_gain"] = grouped["positives"].cumsum() / grouped["positives"].sum()
+    grouped["cumulative_gain"] = (
+        grouped["positives"].cumsum() / grouped["positives"].sum()
+    )
     return grouped.reset_index()

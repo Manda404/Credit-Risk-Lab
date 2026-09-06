@@ -1,0 +1,6 @@
+person_age,person_gender,person_education,person_income,person_emp_exp,person_home_ownership,loan_amnt,loan_intent,loan_int_rate,loan_percent_income,cb_person_cred_hist_length,credit_score,previous_loan_defaults_on_file,loan_status
+30,female,Bachelor,50000,8,RENT,10000,MEDICAL,10.0,0.20,5,650,No,0
+45,male,Master,120000,20,MORTGAGE,8000,EDUCATION,7.5,0.07,18,760,No,0
+24,female,High School,22000,2,RENT,14000,DEBTCONSOLIDATION,18.0,0.64,2,520,Yes,1
+67,male,Doctorate,95000,45,OWN,5000,PERSONAL,6.0,0.05,30,810,No,0
+21,non_binary,Associate,18000,1,OTHER,6000,VENTURE,16.0,0.33,1,590,No,1

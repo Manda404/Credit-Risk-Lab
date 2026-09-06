@@ -21,11 +21,18 @@ def sha256_file(path: Path) -> str:
 def runtime_versions() -> dict[str, str]:
     """Capture runtime versions needed to diagnose artifact incompatibility."""
     packages = ["pandas", "scikit-learn", "xgboost", "catboost", "lightgbm", "joblib"]
-    versions = {name: importlib.metadata.version(name) for name in packages}
+    versions = {}
+    for name in packages:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = "not-installed"
     return {"python": platform.python_version(), **versions}
 
 
-def save_model_bundle(path: Path, *, model, preprocessor, threshold: float, metadata: dict) -> Path:
+def save_model_bundle(
+    path: Path, *, model, preprocessor, threshold: float, metadata: dict
+) -> Path:
     """Persist an inference bundle with schema and reproducibility metadata.
 
     Joblib/pickle artifacts must only be loaded from trusted storage. They are
@@ -35,10 +42,20 @@ def save_model_bundle(path: Path, *, model, preprocessor, threshold: float, meta
     enriched = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_versions": runtime_versions(),
-        "feature_schema": [str(c) for c in getattr(preprocessor, "feature_names_in_", [])],
+        "feature_schema": [
+            str(c) for c in getattr(preprocessor, "feature_names_in_", [])
+        ],
         **metadata,
     }
-    joblib.dump({"model": model, "preprocessor": preprocessor, "threshold": threshold, "metadata": enriched}, path)
+    joblib.dump(
+        {
+            "model": model,
+            "preprocessor": preprocessor,
+            "threshold": threshold,
+            "metadata": enriched,
+        },
+        path,
+    )
     return path
 
 

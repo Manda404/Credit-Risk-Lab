@@ -56,7 +56,9 @@ class CSVDatasetRepository:
             raise
         if frame.empty:
             raise ValueError(f"Dataset vide : {self.csv_path}")
-        self.logger.info(f"Dataset chargé ({frame.shape[0]} lignes, {frame.shape[1]} colonnes)")
+        self.logger.info(
+            f"Dataset chargé ({frame.shape[0]} lignes, {frame.shape[1]} colonnes)"
+        )
         return frame
 
     @staticmethod

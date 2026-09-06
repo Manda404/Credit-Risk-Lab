@@ -1,0 +1,29 @@
+{
+  "engineered_features": [
+    "dti",
+    "log_income",
+    "estimated_monthly_interest",
+    "interest_to_income",
+    "income_per_experience_year",
+    "credit_score_band",
+    "rate_per_score_point",
+    "age_group",
+    "exp_to_age",
+    "amnt_int_ratio",
+    "loan_risk_score",
+    "loan_intent_risk",
+    "credit_hist_to_age",
+    "credit_hist_category",
+    "age_first_credit",
+    "emp_credit_hist_gap",
+    "has_default_before",
+    "risky_default_score",
+    "home_risk",
+    "edu_level",
+    "is_female",
+    "risk_flags_count",
+    "income_interest_interaction",
+    "age_credit_interaction",
+    "amnt_percent_interaction"
+  ]
+}

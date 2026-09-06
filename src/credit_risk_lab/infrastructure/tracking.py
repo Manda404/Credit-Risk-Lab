@@ -29,9 +29,13 @@ def tracked_run(
         yield run
 
 
-def log_training_outputs(metrics: dict[str, float], artifacts: list[Path] | None = None) -> None:
+def log_training_outputs(
+    metrics: dict[str, float], artifacts: list[Path] | None = None
+) -> None:
     """Log numeric test metrics and existing report files to the active run."""
-    mlflow.log_metrics({k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))})
+    mlflow.log_metrics(
+        {k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))}
+    )
     for artifact in artifacts or []:
         if artifact.exists():
             mlflow.log_artifact(str(artifact))

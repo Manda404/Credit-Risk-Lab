@@ -1,5 +1,6 @@
 import pandas as pd
 from fastapi.testclient import TestClient
+import pytest
 
 from credit_risk_lab.application import RawLoanScorer, create_deployment_split
 from credit_risk_lab.config.settings import settings
@@ -41,9 +42,16 @@ def test_prediction_endpoint_returns_auditable_response():
     assert response.status_code == 200
     body = response.json()
     assert {
-        "request_id", "model_name", "model_version", "probability_of_risk",
-        "risk_decision", "risk_label", "threshold", "threshold_source",
-        "scored_at_utc", "latency_ms",
+        "request_id",
+        "model_name",
+        "model_version",
+        "probability_of_risk",
+        "risk_decision",
+        "risk_label",
+        "threshold",
+        "threshold_source",
+        "scored_at_utc",
+        "latency_ms",
     }.issubset(body)
     assert body["threshold"] == settings.decision_threshold
     assert body["threshold_source"] == "configs/settings.yaml:decision_threshold"
@@ -58,7 +66,7 @@ def test_prediction_endpoint_rejects_implausible_experience():
     assert response.status_code == 422
 
 
-def test_deployment_split_persists_ten_percent(tmp_path):
+def test_deployment_split_returns_ten_percent_without_persisting(tmp_path):
     rows = []
     for i in range(100):
         row = raw_application()
@@ -66,8 +74,18 @@ def test_deployment_split_persists_ten_percent(tmp_path):
         row["person_income"] += i
         rows.append(row)
     result = create_deployment_split(
-        pd.DataFrame(rows), train_path=tmp_path / "train.csv", test_path=tmp_path / "test.csv"
+        pd.DataFrame(rows),
+        train_path=tmp_path / "train.csv",
+        test_path=tmp_path / "test.csv",
     )
     assert result.train_rows == 90
     assert result.test_rows == 10
-    assert "loan_status" in pd.read_csv(result.test_path)
+    assert "loan_status" in result.test
+    assert not result.train_path.exists()
+    assert not result.test_path.exists()
+
+
+def test_raw_scorer_rejects_missing_inference_feature():
+    frame = pd.DataFrame([raw_application()]).drop(columns=["credit_score"])
+    with pytest.raises(ValueError, match="credit_score"):
+        RawLoanScorer(load_model_bundle(settings.model_bundle_path)).score(frame)

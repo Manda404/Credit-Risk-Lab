@@ -24,7 +24,9 @@ def main() -> None:
     """Stream raw test rows while keeping labels outside API requests."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://localhost:8000/v1/predict")
-    parser.add_argument("--interval", type=float, default=2.0, help="Seconds between requests")
+    parser.add_argument(
+        "--interval", type=float, default=2.0, help="Seconds between requests"
+    )
     parser.add_argument("--limit", type=int, default=0, help="0 sends every row")
     args = parser.parse_args()
     frame = pd.read_csv(settings.test_path)
@@ -34,7 +36,16 @@ def main() -> None:
         expected = int(row[settings.target_column])
         payload = row.drop(labels=[settings.target_column]).to_dict()
         status, response = post_json(args.url, payload)
-        print(json.dumps({"row": int(index), "expected": expected, "http": status, "response": response}))
+        print(
+            json.dumps(
+                {
+                    "row": int(index),
+                    "expected": expected,
+                    "http": status,
+                    "response": response,
+                }
+            )
+        )
         if args.interval > 0:
             time.sleep(args.interval)
 

@@ -7,20 +7,23 @@ import pandas as pd
 
 from credit_risk_lab.application import RawLoanScorer
 from credit_risk_lab.config.settings import settings
-from credit_risk_lab.infrastructure.modeling import load_model_bundle
+from credit_risk_lab.infrastructure.modeling import JoblibModelBundleRepository
 from .api_models import LoanApplication, PredictionResponse
 
 
 @lru_cache(maxsize=1)
 def get_scorer() -> RawLoanScorer:
     """Load the trusted model once per API process."""
+    repository = JoblibModelBundleRepository()
     return RawLoanScorer(
-        load_model_bundle(settings.model_bundle_path),
+        repository.load(settings.model_bundle_path),
         threshold=settings.decision_threshold,
     )
 
 
-def predict_application(application: LoanApplication, request_id: str) -> PredictionResponse:
+def predict_application(
+    application: LoanApplication, request_id: str
+) -> PredictionResponse:
     """Engineer features, run inference, and build an auditable response."""
     start = perf_counter()
     result = get_scorer().score(pd.DataFrame([application.model_dump()]))

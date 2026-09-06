@@ -4,15 +4,26 @@ from dataclasses import dataclass
 
 import pandas as pd
 from credit_risk_lab.config.settings import settings
-from credit_risk_lab.application.dataset_splitting import three_way_stratified_split, three_way_temporal_split
-from credit_risk_lab.infrastructure.evaluation import classification_metrics, decile_table, find_optimal_threshold
-from credit_risk_lab.infrastructure.modeling import build_configured_models, build_preprocessor
+from credit_risk_lab.application.dataset_splitting import (
+    three_way_stratified_split,
+    three_way_temporal_split,
+)
+from credit_risk_lab.infrastructure.evaluation import (
+    classification_metrics,
+    decile_table,
+    find_optimal_threshold,
+)
+from credit_risk_lab.infrastructure.modeling import (
+    build_configured_models,
+    build_preprocessor,
+)
 from credit_risk_lab.shared.logging import setup_logger
 
 
 @dataclass
 class TrainingResult:
     """Artifacts from model development with test isolation made explicit."""
+
     metrics: pd.DataFrame
     test_metrics: pd.DataFrame
     selected_model_name: str
@@ -56,28 +67,51 @@ class TrainBoostingModelsUseCase:
         """
         if split_strategy == "temporal":
             if not date_column:
-                raise ValueError("A decision date column is mandatory for temporal validation")
+                raise ValueError(
+                    "A decision date column is mandatory for temporal validation"
+                )
             split = three_way_temporal_split(
-                frame, date_column=date_column, target_column=target_column, group_column=group_column
+                frame,
+                date_column=date_column,
+                target_column=target_column,
+                group_column=group_column,
             )
         elif split_strategy == "random_experimental":
-            self.logger.warning("Using random split: results are educational, not production evidence")
+            self.logger.warning(
+                "Using random split: results are educational, not production evidence"
+            )
             split = three_way_stratified_split(frame, target_column, self.random_state)
         else:
-            raise ValueError("split_strategy must be 'temporal' or 'random_experimental'")
+            raise ValueError(
+                "split_strategy must be 'temporal' or 'random_experimental'"
+            )
         x_train, x_validation, x_test = split.x_train, split.x_validation, split.x_test
         y_train, y_validation, y_test = split.y_train, split.y_validation, split.y_test
-        split_summary = pd.DataFrame([
-            {"split": "train", "rows": len(y_train), "positive_rate": y_train.mean()},
-            {"split": "validation", "rows": len(y_validation), "positive_rate": y_validation.mean()},
-            {"split": "test", "rows": len(y_test), "positive_rate": y_test.mean()},
-        ])
-        self.logger.info(f"Dataset split completed: {split_summary.to_dict(orient='records')}")
+        split_summary = pd.DataFrame(
+            [
+                {
+                    "split": "train",
+                    "rows": len(y_train),
+                    "positive_rate": y_train.mean(),
+                },
+                {
+                    "split": "validation",
+                    "rows": len(y_validation),
+                    "positive_rate": y_validation.mean(),
+                },
+                {"split": "test", "rows": len(y_test), "positive_rate": y_test.mean()},
+            ]
+        )
+        self.logger.info(
+            f"Dataset split completed: {split_summary.to_dict(orient='records')}"
+        )
 
         present_sensitive = [c for c in self.sensitive_columns if c in x_test.columns]
         sensitive_test = x_test[present_sensitive].copy()
         if present_sensitive:
-            self.logger.info(f"Excluding sensitive columns from training features: {present_sensitive}")
+            self.logger.info(
+                f"Excluding sensitive columns from training features: {present_sensitive}"
+            )
             x_train = x_train.drop(columns=present_sensitive)
             x_validation = x_validation.drop(columns=present_sensitive)
             x_test = x_test.drop(columns=present_sensitive)
@@ -106,27 +140,49 @@ class TrainBoostingModelsUseCase:
             model.fit(x_train_t, y_train, x_validation_t, y_validation)
             validation_probabilities = model.predict_proba(x_validation_t)
             threshold = find_optimal_threshold(y_validation, validation_probabilities)
-            metrics = classification_metrics(y_validation, validation_probabilities, threshold)
+            metrics = classification_metrics(
+                y_validation, validation_probabilities, threshold
+            )
             rows.append({"model": model.name, "threshold": threshold, **metrics})
             histories[model.name] = model.history
             fitted[model.name] = model
             validation_probabilities_by_model[model.name] = validation_probabilities
-            self.logger.info(f"{model.name} validation ROC-AUC={metrics['roc_auc']:.4f}")
-        validation_metrics = pd.DataFrame(rows).sort_values(
-            settings.selection_metric, ascending=False
-        ).reset_index(drop=True)
+            self.logger.info(
+                f"{model.name} validation ROC-AUC={metrics['roc_auc']:.4f}"
+            )
+        validation_metrics = (
+            pd.DataFrame(rows)
+            .sort_values(settings.selection_metric, ascending=False)
+            .reset_index(drop=True)
+        )
         selected_name = str(validation_metrics.iloc[0]["model"])
         selected_threshold = float(validation_metrics.iloc[0]["threshold"])
         test_probabilities = fitted[selected_name].predict_proba(x_test_t)
-        final_test_metrics = classification_metrics(y_test, test_probabilities, selected_threshold)
-        test_metrics = pd.DataFrame([{
-            "model": selected_name, "threshold": selected_threshold, **final_test_metrics
-        }])
+        final_test_metrics = classification_metrics(
+            y_test, test_probabilities, selected_threshold
+        )
+        test_metrics = pd.DataFrame(
+            [
+                {
+                    "model": selected_name,
+                    "threshold": selected_threshold,
+                    **final_test_metrics,
+                }
+            ]
+        )
         deciles = {selected_name: decile_table(y_test, test_probabilities)}
         self.logger.info(
             f"Selected {selected_name} on validation; final test ROC-AUC={final_test_metrics['roc_auc']:.4f}"
         )
         return TrainingResult(
-            validation_metrics, test_metrics, selected_name, histories, fitted,
-            preprocessor, deciles, split_summary, sensitive_test, split_strategy,
+            validation_metrics,
+            test_metrics,
+            selected_name,
+            histories,
+            fitted,
+            preprocessor,
+            deciles,
+            split_summary,
+            sensitive_test,
+            split_strategy,
         )

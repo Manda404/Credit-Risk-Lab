@@ -12,8 +12,12 @@ def test_models_are_instantiated_from_versioned_yaml():
     config = load_models_config()
     models = build_configured_models(random_state=7, config=config)
     assert [model.name for model in models] == [
-        "LogisticRegression", "RandomForest", "XGBoost", "CatBoost", "LightGBM"
+        "LogisticRegression",
+        "RandomForest",
+        "XGBoost",
+        "LightGBM",
     ]
+    assert config.models["catboost"].enabled is False
     xgboost = next(model for model in models if model.name == "XGBoost")
     assert xgboost.parameters["learning_rate"] == 0.06
     assert xgboost.model.get_params()["random_state"] == 7

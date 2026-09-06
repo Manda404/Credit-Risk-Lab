@@ -63,7 +63,9 @@ class DataAnalyzer:
                 }
             )
 
-        summary_df = pd.DataFrame(summary_rows).sort_values("% Missing", ascending=False)
+        summary_df = pd.DataFrame(summary_rows).sort_values(
+            "% Missing", ascending=False
+        )
 
         self.logger.info(
             f"Résumé terminé : {len(summary_df)} colonnes, {total_rows} lignes."
@@ -91,7 +93,9 @@ class DataAnalyzer:
         datetime_cols = self.df.select_dtypes(include=["datetime"]).columns.tolist()
 
         if datetime_cols:
-            self.logger.info(f"{len(datetime_cols)} colonnes datetime détectées : {datetime_cols}")
+            self.logger.info(
+                f"{len(datetime_cols)} colonnes datetime détectées : {datetime_cols}"
+            )
 
         self.logger.info("Identification des types de variables terminée.")
         self.logger.info(
@@ -103,11 +107,10 @@ class DataAnalyzer:
 
         return numeric_cols, categorical_cols
 
-
     # ==========================================================
     # FONCTION 3 : DISTRIBUTION DE LA VARIABLE CIBLE
     # ==========================================================
-    def plot_target_distribution(self, target_col: str="loan_status") -> None:
+    def plot_target_distribution(self, target_col: str = "loan_status") -> None:
         """
         Affiche côte à côte :
         - un graphique à barres (distribution des catégories),
@@ -128,16 +131,20 @@ class DataAnalyzer:
         # Vérification
         if target_col not in self.df.columns:
             self.logger.error(f"Colonne '{target_col}' introuvable.")
-            raise ValueError(f"La colonne '{target_col}' n'existe pas dans le DataFrame.")
+            raise ValueError(
+                f"La colonne '{target_col}' n'existe pas dans le DataFrame."
+            )
 
         # Résumé
         value_counts = self.df[target_col].value_counts(dropna=False)
         percent = round(value_counts / len(self.df) * 100, 2)
-        summary_df = pd.DataFrame({
-            "category": value_counts.index.astype(str),
-            "count": value_counts.values,
-            "percent": percent.values,
-        })
+        summary_df = pd.DataFrame(
+            {
+                "category": value_counts.index.astype(str),
+                "count": value_counts.values,
+                "percent": percent.values,
+            }
+        )
 
         # 🎨 Palette à 2 couleurs MAX pour un target binaire
         unique_categories = summary_df["category"].tolist()
@@ -150,13 +157,14 @@ class DataAnalyzer:
 
         # Subplots
         fig = make_subplots(
-            rows=1, cols=2,
+            rows=1,
+            cols=2,
             subplot_titles=(
                 f"Répartition des catégories pour '{target_col}'",
-                f"Distribution proportionnelle de '{target_col}'"
+                f"Distribution proportionnelle de '{target_col}'",
             ),
             specs=[[{"type": "bar"}, {"type": "domain"}]],
-            column_widths=[0.6, 0.4]
+            column_widths=[0.6, 0.4],
         )
 
         # --- Bar chart
@@ -166,7 +174,7 @@ class DataAnalyzer:
             y="count",
             text="percent",
             color="category",
-            color_discrete_map=color_map
+            color_discrete_map=color_map,
         )
         for trace in bar_fig.data:
             fig.add_trace(trace, row=1, col=1)
@@ -177,13 +185,15 @@ class DataAnalyzer:
             names="category",
             values="count",
             color="category",
-            color_discrete_map=color_map
+            color_discrete_map=color_map,
         )
         for trace in pie_fig.data:
             fig.add_trace(trace, row=1, col=2)
 
         # Mise en forme
-        fig.update_traces(texttemplate="%{text:.2f}%", textposition="outside", row=1, col=1)
+        fig.update_traces(
+            texttemplate="%{text:.2f}%", textposition="outside", row=1, col=1
+        )
         fig.update_layout(
             title_text=f"Distribution de la variable cible : '{target_col}'",
             showlegend=True,
@@ -191,11 +201,13 @@ class DataAnalyzer:
             height=500,
             width=1000,
             title_x=0.5,
-            legend_title_text="Catégories"
+            legend_title_text="Catégories",
         )
 
         fig.update_xaxes(title_text="Catégorie", row=1, col=1)
         fig.update_yaxes(title_text="Nombre d'observations", row=1, col=1)
 
         fig.show()
-        self.logger.info(f"Visualisation complète affichée pour la cible '{target_col}'.")
+        self.logger.info(
+            f"Visualisation complète affichée pour la cible '{target_col}'."
+        )

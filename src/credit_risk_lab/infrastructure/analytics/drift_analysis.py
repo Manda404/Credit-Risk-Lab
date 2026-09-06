@@ -114,7 +114,9 @@ class DriftAnalyzer:
     # ---------------------------------------------------------
     # 3. HELLINGER DISTANCE
     # ---------------------------------------------------------
-    def hellinger(self, expected: np.ndarray, actual: np.ndarray, bins: int = None) -> float:
+    def hellinger(
+        self, expected: np.ndarray, actual: np.ndarray, bins: int = None
+    ) -> float:
         """
         Measures similarity between two histograms.
         Range : 0 (identical) → 1 (completely different)
@@ -134,16 +136,28 @@ class DriftAnalyzer:
         hist_a = np.where(hist_a == 0, 1e-8, hist_a)
 
         # Hellinger formula
-        hellinger_dist = (1 / np.sqrt(2)) * np.sqrt(np.sum((np.sqrt(hist_e) - np.sqrt(hist_a)) ** 2))
+        hellinger_dist = (1 / np.sqrt(2)) * np.sqrt(
+            np.sum((np.sqrt(hist_e) - np.sqrt(hist_a)) ** 2)
+        )
         return float(hellinger_dist)
 
     def categorical_psi(self, expected: pd.Series, actual: pd.Series) -> float:
         """Compute PSI on the union of categories, including missing values."""
         exp = expected.astype("string").fillna("<missing>")
         act = actual.astype("string").fillna("<missing>")
-        categories = exp.unique().tolist() + [v for v in act.unique() if v not in set(exp.unique())]
-        exp_p = exp.value_counts(normalize=True).reindex(categories, fill_value=0).to_numpy()
-        act_p = act.value_counts(normalize=True).reindex(categories, fill_value=0).to_numpy()
+        categories = exp.unique().tolist() + [
+            v for v in act.unique() if v not in set(exp.unique())
+        ]
+        exp_p = (
+            exp.value_counts(normalize=True)
+            .reindex(categories, fill_value=0)
+            .to_numpy()
+        )
+        act_p = (
+            act.value_counts(normalize=True)
+            .reindex(categories, fill_value=0)
+            .to_numpy()
+        )
         exp_p = np.maximum(exp_p, 1e-4)
         act_p = np.maximum(act_p, 1e-4)
         return float(np.sum((exp_p - act_p) * np.log(exp_p / act_p)))
@@ -178,7 +192,10 @@ class DriftAnalyzer:
 
         for col in features:
             if not pd.api.types.is_numeric_dtype(expected_df[col]):
-                report[col] = {"type": "categorical", "psi": self.categorical_psi(expected_df[col], actual_df[col])}
+                report[col] = {
+                    "type": "categorical",
+                    "psi": self.categorical_psi(expected_df[col], actual_df[col]),
+                }
                 continue
             exp_vals = expected_df[col].dropna().to_numpy(dtype=float)
             act_vals = actual_df[col].dropna().to_numpy(dtype=float)
@@ -209,9 +226,15 @@ class DriftAnalyzer:
         alert. They should be tuned to feature criticality and sample size.
         """
         nested = self.compute_drift_report(expected_df, actual_df, features=features)
-        frame = pd.DataFrame.from_dict(nested, orient="index").rename_axis("feature").reset_index()
+        frame = (
+            pd.DataFrame.from_dict(nested, orient="index")
+            .rename_axis("feature")
+            .reset_index()
+        )
         frame["status"] = pd.cut(
-            frame["psi"], bins=[-np.inf, 0.10, 0.25, np.inf],
-            labels=["stable", "review", "alert"], right=False,
+            frame["psi"],
+            bins=[-np.inf, 0.10, 0.25, np.inf],
+            labels=["stable", "review", "alert"],
+            right=False,
         ).astype(str)
         return frame.sort_values("psi", ascending=False).reset_index(drop=True)

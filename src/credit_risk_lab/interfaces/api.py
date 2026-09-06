@@ -35,7 +35,10 @@ def health() -> dict[str, str]:
 def ready() -> dict[str, str]:
     """Confirm that the model bundle is loaded."""
     scorer = get_scorer()
-    return {"status": "ready", "model": scorer.model_scorer.bundle["metadata"]["model_name"]}
+    return {
+        "status": "ready",
+        "model": scorer.model_scorer.bundle["metadata"]["model_name"],
+    }
 
 
 @app.post("/v1/predict", response_model=PredictionResponse)

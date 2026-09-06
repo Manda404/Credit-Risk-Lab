@@ -17,6 +17,8 @@ class DeploymentSplitResult:
     test_path: Path
     train_rows: int
     test_rows: int
+    train: pd.DataFrame
+    test: pd.DataFrame
 
 
 def create_deployment_split(
@@ -28,7 +30,7 @@ def create_deployment_split(
     train_path: Path = settings.train_path,
     test_path: Path = settings.test_path,
 ) -> DeploymentSplitResult:
-    """Clean, stratify, and persist a 90/10 external holdout.
+    """Clean and stratify a 90/10 external holdout.
 
     ``test.csv`` remains raw (no engineered features) so the simulator exercises
     exactly the same validation and feature-engineering code as a future client.
@@ -45,8 +47,6 @@ def create_deployment_split(
         stratify=clean[target_column],
     )
     train, test = train.reset_index(drop=True), test.reset_index(drop=True)
-    train_path.parent.mkdir(parents=True, exist_ok=True)
-    test_path.parent.mkdir(parents=True, exist_ok=True)
-    train.to_csv(train_path, index=False)
-    test.to_csv(test_path, index=False)
-    return DeploymentSplitResult(train_path, test_path, len(train), len(test))
+    return DeploymentSplitResult(
+        train_path, test_path, len(train), len(test), train, test
+    )

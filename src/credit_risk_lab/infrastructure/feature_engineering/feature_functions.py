@@ -18,6 +18,18 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 
+from credit_risk_lab.domain.services.credit_feature_rules import (
+    AGE_GROUP_BINS,
+    AGE_GROUP_LABELS,
+    CREDIT_HISTORY_BINS,
+    CREDIT_HISTORY_LABELS,
+    CREDIT_SCORE_BAND_LABELS,
+    CREDIT_SCORE_BANDS,
+    EDUCATION_LEVELS,
+    HOME_OWNERSHIP_RISK,
+    LOAN_INTENT_RISK,
+)
+
 
 # ==========================================================
 # 1. INCOME & SOLVENCY FEATURES
@@ -90,15 +102,17 @@ def add_credit_score_features(df: DataFrame) -> DataFrame:
     """
     df["credit_score_band"] = pd.cut(
         df["credit_score"],
-        bins=[300, 579, 669, 739, 799, 900],
-        labels=["Poor", "Fair", "Good", "Very Good", "Excellent"],
+        bins=CREDIT_SCORE_BANDS,
+        labels=CREDIT_SCORE_BAND_LABELS,
         include_lowest=True,
     )
 
     # Interest rate charged per point of credit score: a pricing-efficiency
     # signal distinct from either variable alone — two borrowers with the same
     # score can be priced very differently, and this ratio surfaces that gap.
-    df["rate_per_score_point"] = df["loan_int_rate"] / df["credit_score"].replace(0, np.nan)
+    df["rate_per_score_point"] = df["loan_int_rate"] / df["credit_score"].replace(
+        0, np.nan
+    )
 
     return df
 
@@ -114,8 +128,8 @@ def add_age_experience_features(df: DataFrame) -> DataFrame:
     """
     df["age_group"] = pd.cut(
         df["person_age"],
-        bins=[18, 25, 35, 50, 65, 110],
-        labels=["18-25", "26-35", "36-50", "51-65", "65+"],
+        bins=AGE_GROUP_BINS,
+        labels=AGE_GROUP_LABELS,
         include_lowest=True,
     )
 
@@ -137,15 +151,7 @@ def add_loan_features(df: DataFrame) -> DataFrame:
     df["amnt_int_ratio"] = df["loan_amnt"] / df["loan_int_rate"].replace(0, np.nan)
     df["loan_risk_score"] = df["loan_int_rate"] * df["loan_percent_income"]
 
-    intent_map = {
-        "MEDICAL": 3,
-        "PERSONAL": 2,
-        "VENTURE": 2,
-        "EDUCATION": 1,
-        "HOMEIMPROVEMENT": 1,
-        "DEBTCONSOLIDATION": 2,
-    }
-    df["loan_intent_risk"] = df["loan_intent"].map(intent_map)
+    df["loan_intent_risk"] = df["loan_intent"].map(LOAN_INTENT_RISK)
     return df
 
 
@@ -166,8 +172,8 @@ def add_credit_history_features(df: DataFrame) -> DataFrame:
 
     df["credit_hist_category"] = pd.cut(
         df["cb_person_cred_hist_length"],
-        bins=[0, 3, 7, 15, 40],
-        labels=["0-3", "4-7", "8-15", "15+"],
+        bins=CREDIT_HISTORY_BINS,
+        labels=CREDIT_HISTORY_LABELS,
         include_lowest=True,
     )
 
@@ -196,7 +202,9 @@ def add_default_features(df: DataFrame) -> DataFrame:
         df["previous_loan_defaults_on_file"].astype(str).str.upper().eq("YES")
     ).astype(int)
 
-    df["risky_default_score"] = df["has_default_before"] * (650 - df["credit_score"]).clip(lower=0)
+    df["risky_default_score"] = df["has_default_before"] * (
+        650 - df["credit_score"]
+    ).clip(lower=0)
 
     return df
 
@@ -211,21 +219,15 @@ def add_business_encoding(df: DataFrame) -> DataFrame:
     - edu_level
     - is_female
     """
-    home_map = {"OWN": 2, "MORTGAGE": 1, "RENT": 0, "OTHER": 0}
     df["home_risk"] = (
-        df["person_home_ownership"].astype(str).str.upper().map(home_map)
+        df["person_home_ownership"].astype(str).str.upper().map(HOME_OWNERSHIP_RISK)
     )
 
-    edu_map = {
-        "High School": 0,
-        "Associate": 1,
-        "Bachelor": 2,
-        "Master": 3,
-        "Doctorate": 4,
-    }
-    df["edu_level"] = df["person_education"].map(edu_map)
+    df["edu_level"] = df["person_education"].map(EDUCATION_LEVELS)
 
-    df["is_female"] = df["person_gender"].astype(str).str.lower().eq("female").astype(int)
+    df["is_female"] = (
+        df["person_gender"].astype(str).str.lower().eq("female").astype(int)
+    )
 
     return df
 

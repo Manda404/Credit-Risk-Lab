@@ -1,7 +1,10 @@
 import pandas as pd
 import pytest
 
-from credit_risk_lab.infrastructure.data_sources import CSVDataSourceConfig, CSVDatasetRepository
+from credit_risk_lab.infrastructure.data_sources import (
+    CSVDataSourceConfig,
+    CSVDatasetRepository,
+)
 
 
 def test_repository_uses_explicit_path_and_csv_options(tmp_path):
@@ -18,7 +21,9 @@ def test_repository_uses_explicit_path_and_csv_options(tmp_path):
 
 
 def test_repository_fails_for_missing_explicit_path(tmp_path):
-    repository = CSVDatasetRepository(CSVDataSourceConfig(path=tmp_path / "missing.csv"))
+    repository = CSVDatasetRepository(
+        CSVDataSourceConfig(path=tmp_path / "missing.csv")
+    )
     with pytest.raises(FileNotFoundError, match="missing.csv"):
         repository.load()
 

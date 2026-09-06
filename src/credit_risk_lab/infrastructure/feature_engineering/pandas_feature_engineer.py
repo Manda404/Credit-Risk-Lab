@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 from pandas import DataFrame
+from credit_risk_lab.domain.entities import LoanSchema
 from credit_risk_lab.shared.logging import setup_logger
 from credit_risk_lab.infrastructure.feature_engineering.feature_functions import (
     add_income_features,
@@ -18,7 +17,6 @@ from credit_risk_lab.infrastructure.feature_engineering.feature_functions import
     add_interaction_features,
     sanitize_features,
 )
-
 
 
 class LoanFeatureEngineer:
@@ -100,23 +98,9 @@ class LoanFeatureEngineer:
         Vérifie que toutes les colonnes nécessaires au feature engineering
         sont bien présentes dans le DataFrame.
         """
-        required_cols = [
-            "person_age",
-            "person_gender",
-            "person_education",
-            "person_income",
-            "person_emp_exp",
-            "person_home_ownership",
-            "loan_amnt",
-            "loan_intent",
-            "loan_int_rate",
-            "loan_percent_income",
-            "cb_person_cred_hist_length",
-            "credit_score",
-            "previous_loan_defaults_on_file",
+        missing = [
+            col for col in LoanSchema.raw_feature_columns if col not in df.columns
         ]
-
-        missing = [col for col in required_cols if col not in df.columns]
         if missing:
             msg = f"Colonnes manquantes pour le feature engineering : {missing}"
             self.logger.error(msg)

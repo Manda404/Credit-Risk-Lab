@@ -36,8 +36,11 @@ def three_way_stratified_split(
     )
     relative_validation = settings.validation_size / (1 - settings.test_size)
     x_train, x_validation, y_train, y_validation = train_test_split(
-        x_train_val, y_train_val, test_size=relative_validation,
-        stratify=y_train_val, random_state=random_state,
+        x_train_val,
+        y_train_val,
+        test_size=relative_validation,
+        stratify=y_train_val,
+        random_state=random_state,
     )
     return ThreeWaySplit(x_train, x_validation, x_test, y_train, y_validation, y_test)
 
@@ -75,7 +78,9 @@ def three_way_temporal_split(
     if missing:
         raise ValueError(f"Temporal split requires columns: {missing}")
     work = frame.copy()
-    work[date_column] = pd.to_datetime(work[date_column], errors="coerce", utc=True, format="mixed")
+    work[date_column] = pd.to_datetime(
+        work[date_column], errors="coerce", utc=True, format="mixed"
+    )
     if work[date_column].isna().any():
         raise ValueError(f"{date_column} contains missing or invalid timestamps")
     if group_column:
@@ -86,7 +91,9 @@ def three_way_temporal_split(
     else:
         work = work.assign(_split_date=work[date_column])
     work = work.sort_values(["_split_date", date_column], kind="stable")
-    keys = work[group_column].drop_duplicates() if group_column else work.index.to_series()
+    keys = (
+        work[group_column].drop_duplicates() if group_column else work.index.to_series()
+    )
     n_keys = len(keys)
     train_end = int(n_keys * (1 - settings.validation_size - settings.test_size))
     validation_end = int(n_keys * (1 - settings.test_size))
@@ -100,12 +107,16 @@ def three_way_temporal_split(
         test = work[~work[group_column].isin(train_keys | validation_keys)]
     else:
         train, validation, test = (
-            work.iloc[:train_end], work.iloc[train_end:validation_end], work.iloc[validation_end:]
+            work.iloc[:train_end],
+            work.iloc[train_end:validation_end],
+            work.iloc[validation_end:],
         )
+
     def unpack(part: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
         y = part[target_column].astype(int)
         x = part.drop(columns=[target_column, "_split_date"])
         return x, y
+
     x_train, y_train = unpack(train)
     x_validation, y_validation = unpack(validation)
     x_test, y_test = unpack(test)

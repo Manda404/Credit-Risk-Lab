@@ -18,9 +18,11 @@ WRAPPER_TYPES: dict[str, type[ModelWrapper]] = {
     "logistic_regression": LogisticRegressionWrapper,
     "random_forest": RandomForestWrapper,
     "xgboost": XGBoostWrapper,
-    "catboost": CatBoostWrapper,
     "lightgbm": LightGBMWrapper,
 }
+
+if CatBoostWrapper is not None:
+    WRAPPER_TYPES["catboost"] = CatBoostWrapper
 
 
 def build_configured_models(
@@ -37,7 +39,10 @@ def build_configured_models(
     """
     loaded = config or load_models_config(config_path)
     overrides = parameter_overrides or {}
-    unknown = sorted(set(loaded.models).difference(WRAPPER_TYPES))
+    enabled_models = {
+        key for key, definition in loaded.models.items() if definition.enabled
+    }
+    unknown = sorted(enabled_models.difference(WRAPPER_TYPES))
     if unknown:
         raise ValueError(f"No wrapper registered for configured models: {unknown}")
     wrappers = []
@@ -45,10 +50,12 @@ def build_configured_models(
         if not definition.enabled:
             continue
         parameters = {**definition.parameters, **overrides.get(key, {})}
-        wrappers.append(WRAPPER_TYPES[key](
-            name=definition.display_name,
-            parameters=parameters,
-            random_state=random_state,
-            early_stopping_rounds=definition.early_stopping_rounds,
-        ))
+        wrappers.append(
+            WRAPPER_TYPES[key](
+                name=definition.display_name,
+                parameters=parameters,
+                random_state=random_state,
+                early_stopping_rounds=definition.early_stopping_rounds,
+            )
+        )
     return wrappers

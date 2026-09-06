@@ -31,7 +31,7 @@ models:
       eval_metric: logloss
       n_jobs: -1
   catboost:
-    enabled: true
+    enabled: false
     display_name: CatBoost
     early_stopping_rounds: 15
     parameters:

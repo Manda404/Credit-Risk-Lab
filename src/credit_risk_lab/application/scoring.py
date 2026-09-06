@@ -58,7 +58,9 @@ class RawLoanScorer:
         threshold: float | None = None,
     ):
         self.model_scorer = ModelScorer(bundle, threshold=threshold)
-        self.feature_engineer = feature_engineer or LoanFeatureEngineer(logger_name="api_features")
+        self.feature_engineer = feature_engineer or LoanFeatureEngineer(
+            logger_name="api_features"
+        )
 
     def score(self, raw_frame: pd.DataFrame) -> ScoringResult:
         """Transform raw loan applications and return risk predictions.

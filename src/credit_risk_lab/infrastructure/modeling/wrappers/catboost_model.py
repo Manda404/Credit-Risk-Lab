@@ -12,7 +12,8 @@ class CatBoostWrapper(ModelWrapper):
 
     def fit(self, x_train, y_train, x_validation, y_validation):
         self.model.fit(
-            x_train, y_train,
+            x_train,
+            y_train,
             eval_set=(x_validation, y_validation),
             early_stopping_rounds=self.early_stopping_rounds,
             verbose=False,

@@ -13,7 +13,8 @@ class XGBoostWrapper(ModelWrapper):
     def fit(self, x_train, y_train, x_validation, y_validation):
         self.model.set_params(early_stopping_rounds=self.early_stopping_rounds)
         self.model.fit(
-            x_train, y_train,
+            x_train,
+            y_train,
             eval_set=[(x_train, y_train), (x_validation, y_validation)],
             verbose=False,
         )
