@@ -1,0 +1,56 @@
+# Single source of truth for candidate model hyperparameters.
+# Set `enabled: false` to exclude a candidate without changing Python code.
+models:
+  logistic_regression:
+    enabled: true
+    display_name: LogisticRegression
+    parameters:
+      max_iter: 2000
+      solver: lbfgs
+  random_forest:
+    enabled: true
+    display_name: RandomForest
+    parameters:
+      n_estimators: 300
+      max_depth: 12
+      min_samples_split: 10
+      min_samples_leaf: 4
+      max_features: sqrt
+      class_weight: balanced
+      n_jobs: -1
+  xgboost:
+    enabled: true
+    display_name: XGBoost
+    early_stopping_rounds: 15
+    parameters:
+      n_estimators: 120
+      learning_rate: 0.06
+      max_depth: 5
+      subsample: 0.85
+      colsample_bytree: 0.85
+      eval_metric: logloss
+      n_jobs: -1
+  catboost:
+    enabled: true
+    display_name: CatBoost
+    early_stopping_rounds: 15
+    parameters:
+      iterations: 120
+      learning_rate: 0.06
+      depth: 6
+      loss_function: Logloss
+      eval_metric: Logloss
+      verbose: false
+      allow_writing_files: false
+  lightgbm:
+    enabled: true
+    display_name: LightGBM
+    early_stopping_rounds: 15
+    parameters:
+      n_estimators: 120
+      learning_rate: 0.06
+      num_leaves: 31
+      subsample: 0.85
+      colsample_bytree: 0.85
+      n_jobs: -1
+      verbosity: -1

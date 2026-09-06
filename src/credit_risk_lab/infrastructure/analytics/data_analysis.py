@@ -21,7 +21,7 @@ class DataAnalyzer:
             raise ValueError("DataAnalyzer requires a non-empty DataFrame.")
 
         self.df = df
-        self.logger = setup_logger("data_analyzer")
+        self.logger = setup_logger(name="data_analyzer")
 
     # ==========================================================
     # FONCTION 1 : SYNTHÈSE DU DATASET

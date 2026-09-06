@@ -1,96 +1,68 @@
-# src/credit_risk_lab/infrastructure/data_sources/csv_dataset_repository.py
+"""Explicitly configured CSV loading and saving."""
 
-import pandas as pd
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
+import pandas as pd
 
-from credit_risk_lab.config.settings import settings
 from credit_risk_lab.shared.logging import setup_logger
-from credit_risk_lab.domain.ports.dataset_repository_port import DatasetRepositoryPort
 
 
-class CSVDatasetRepository(DatasetRepositoryPort):
+@dataclass(frozen=True)
+class CSVDataSourceConfig:
+    """Everything required to read one CSV source.
+
+    Keeping the path in this object makes data lineage visible at the call site:
+    ``CSVDatasetRepository(config).load()`` never guesses a folder or filename.
+    Extra options are forwarded to :func:`pandas.read_csv`.
     """
-    Adapter concret pour charger un dataset CSV.
-    Implémente le port DatasetRepositoryPort de la couche Domain.
-    """
 
-    def __init__(
-        self,
-        name_file: str = "loan_data.csv",
-        name_folder: str = "raw",  # data/processed, data/raw
-        *,
-        sep: str = ",",
-        encoding: str = "utf-8",
-        dtype: Optional[Dict[str, Any]] = None,
-        nrows: Optional[int] = None,
-        **extra_read_csv_options: Any,
-    ) -> None:
+    path: Path
+    sep: str = ","
+    encoding: str = "utf-8"
+    dtype: dict[str, Any] | None = None
+    nrows: int | None = None
+    read_options: dict[str, Any] = field(default_factory=dict)
 
-        # ------------------------------------------------------------
-        # LOGGER — instancié une seule fois
-        # ------------------------------------------------------------
+    def read_kwargs(self) -> dict[str, Any]:
+        """Return clean keyword arguments accepted by ``pandas.read_csv``."""
+        options: dict[str, Any] = {"sep": self.sep, "encoding": self.encoding}
+        if self.dtype is not None:
+            options["dtype"] = self.dtype
+        if self.nrows is not None:
+            options["nrows"] = self.nrows
+        return {**options, **self.read_options}
+
+
+class CSVDatasetRepository:
+    """Read and write CSV files using an explicit source configuration."""
+
+    def __init__(self, config: CSVDataSourceConfig) -> None:
+        self.config = config
+        self.csv_path = config.path.expanduser().resolve()
         self.logger = setup_logger(name="CSVDatasetRepository")
 
-        # ------------------------------------------------------------
-        # Chemin du CSV
-        # ------------------------------------------------------------
-        self.csv_path = settings.data_dir / name_folder / name_file
-
+    def load(self) -> pd.DataFrame:
+        """Load the configured CSV and fail clearly for missing or empty data."""
         if not self.csv_path.exists():
             raise FileNotFoundError(f"Fichier introuvable : {self.csv_path}")
-
-        self.read_kwargs = {
-            "sep": sep,
-            "encoding": encoding,
-            "dtype": dtype,
-            "nrows": nrows,
-            **extra_read_csv_options,
-        }
-
-        self.logger.debug(
-            f"Initialisé avec fichier={self.csv_path} "
-            f"options={self.read_kwargs}"
-        )
-
-    # ----------------------------------------------------------------------
-    def load(self) -> pd.DataFrame:
-        """
-        Charge le dataset CSV en DataFrame.
-        """
+        if not self.csv_path.is_file():
+            raise ValueError(f"La source CSV n'est pas un fichier : {self.csv_path}")
         self.logger.info(f"Chargement du fichier : {self.csv_path}")
-
         try:
-            df = pd.read_csv(self.csv_path, **self.read_kwargs)
-        except Exception as e:
-            self.logger.error(f"Erreur lors de la lecture CSV : {e}")
+            frame = pd.read_csv(self.csv_path, **self.config.read_kwargs())
+        except Exception as exc:
+            self.logger.error(f"Erreur lors de la lecture CSV : {exc}")
             raise
-
-        if df.empty:
+        if frame.empty:
             raise ValueError(f"Dataset vide : {self.csv_path}")
+        self.logger.info(f"Dataset chargé ({frame.shape[0]} lignes, {frame.shape[1]} colonnes)")
+        return frame
 
-        self.logger.info(
-            f"Dataset chargé ({df.shape[0]} lignes, {df.shape[1]} colonnes)"
-        )
-
-        return df
-
-    # ----------------------------------------------------------------------
-    def save(self, data: pd.DataFrame, name_data: str = "train") -> None:
-        """
-        Sauvegarde un DataFrame en CSV.
-        """
-        output_path = settings.data_dir / "processed" / f"{name_data}.csv"
-        self.logger.info(f"Sauvegarde du fichier : {output_path}")
-
-        try:
-            data.to_csv(
-                output_path,
-                index=False,
-                encoding=self.read_kwargs.get("encoding", "utf-8"),
-            )
-        except Exception as e:
-            self.logger.error(f"Erreur lors de la sauvegarde CSV : {e}")
-            raise
-
-        self.logger.info("Fichier sauvegardé avec succès ...")
+    @staticmethod
+    def save(data: pd.DataFrame, path: Path, *, encoding: str = "utf-8") -> Path:
+        """Persist a DataFrame to the explicit destination and return its path."""
+        output_path = path.expanduser().resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        data.to_csv(output_path, index=False, encoding=encoding)
+        return output_path

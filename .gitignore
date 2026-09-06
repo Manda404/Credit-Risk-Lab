@@ -5,6 +5,8 @@ __pycache__/
 .DS_Store
 .ipynb_checkpoints
 logs/
-poetry.lock
+mlruns/
 src/credit_risk_lab/shared/logging_old.py
 .env
+.pytest_cache
+learn

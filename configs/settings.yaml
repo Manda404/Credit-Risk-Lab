@@ -1,0 +1,50 @@
+# Central, versioned configuration for Credit Risk Lab.
+#
+# This file is the single source of truth for project parameters and file
+# names/locations. Code and notebooks must read paths through
+# `credit_risk_lab.config.settings.settings` instead of rebuilding them with
+# `Path(...) / "data" / "processed" / ...`.
+#
+# Environment variables prefixed with CRL_ (see .env) still override any
+# value defined here, for local or deployment-specific overrides.
+
+project_name: "Credit Risk Lab"
+project_version: "0.2.0"
+
+target_column: "loan_status"
+random_state: 42
+test_size: 0.20
+validation_size: 0.20
+
+selection_metric: "roc_auc"
+split_strategy: "random_experimental"
+decision_date_column: null
+borrower_id_column: null
+
+# Operational serving threshold. A prediction with probability_of_risk greater
+# than or equal to this value returns risk_decision=1. In a real project this
+# value must be approved from a documented business-cost analysis; changing it
+# does not require retraining the model, but does require a new deployment.
+decision_threshold: 0.25
+
+sensitive_columns:
+  - person_gender
+  - is_female
+
+log_level: "INFO"
+log_file: "credit_risk_lab.log"
+
+# Raw source location relative to the project root. The resolved local path is
+# available as settings.raw_data_path.
+raw_data_path: "data/raw/loan_data.csv"
+raw_data_sep: ","
+raw_data_encoding: "utf-8"
+modeling_dataset_file: "modeling_dataset.csv"
+train_file: "train.csv"
+test_file: "test.csv"
+
+model_bundle_file: "best_boosting_model.joblib"
+metrics_report_file: "boosting_model_metrics.csv"
+models_config_file: "models.yaml"
+drift_report_file: "deployment_split_drift.csv"
+drift_summary_plot_file: "deployment_split_drift.html"

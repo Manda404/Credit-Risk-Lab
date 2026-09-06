@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from credit_risk_lab.shared.logging import setup_logger
-from credit_risk_lab.domain.ports.feature_engineering_port import FeatureEngineeringPort
 from credit_risk_lab.infrastructure.feature_engineering.feature_functions import (
     add_income_features,
     add_credit_score_features,
@@ -15,29 +14,31 @@ from credit_risk_lab.infrastructure.feature_engineering.feature_functions import
     add_credit_history_features,
     add_default_features,
     add_business_encoding,
+    add_risk_flags,
     add_interaction_features,
     sanitize_features,
 )
 
 
 
-class LoanFeatureEngineer(FeatureEngineeringPort):
+class LoanFeatureEngineer:
     """
     Implémentation concrète du Feature Engineering pour le cas d'usage :
     Loan Approval Classification Dataset.
 
     Règles métier intégrées :
-    - ratios de solvabilité (DTI, payment_to_income, etc.)
+    - ratios de solvabilité (ratio prêt/revenu, intérêt/revenu, etc.)
     - engineering du credit score
     - expérience vs âge
     - structure du prêt et risque
     - historique de crédit
     - encodage métier des catégorielles (home_ownership, education, etc.)
+    - score composite de signaux de risque (risk_flags_count)
     - interactions simples entre variables importantes
     """
 
     def __init__(self, logger_name: str = "loan_feature_engineer") -> None:
-        self.logger = setup_logger(logger_name)
+        self.logger = setup_logger(name=logger_name)
 
     # ------------------------------------------------------------------
     # API publique
@@ -79,10 +80,13 @@ class LoanFeatureEngineer(FeatureEngineeringPort):
         # 8. Encodage métier
         df = add_business_encoding(df)
 
-        # 9. Interactions
+        # 9. Score composite de signaux de risque (dépend de has_default_before)
+        df = add_risk_flags(df)
+
+        # 10. Interactions
         df = add_interaction_features(df)
 
-        # 10. Nettoyage final
+        # 11. Nettoyage final
         df = sanitize_features(df)
 
         self._log_shape(df, "Sortie")

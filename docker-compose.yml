@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      CRL_LOG_LEVEL: INFO
+    restart: unless-stopped
+
+  simulator:
+    build: .
+    profiles: ["simulation"]
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./data/processed/test.csv:/app/data/processed/test.csv:ro
+      - ./scripts:/app/scripts:ro
+    command: ["python", "scripts/simulate_production.py", "--url", "http://api:8000/v1/predict", "--interval", "2"]

@@ -5,7 +5,7 @@ Unified Loguru Logger Configuration — FINAL VERSION
 This logger configuration combines:
 - the clean formatting of your first logger
 - the production-grade structure of the second logger
-- a strict Clean Architecture philosophy
+- one straightforward project-wide logging setup
 
 It ensures:
 -----------
@@ -37,8 +37,8 @@ IS_LOGURU_CONFIGURED = False
 def setup_logger(
     name: str | None = None,
     *,
-    log_name: str = "credit_risk_lab.log",
-    level: str = "INFO",
+    log_name: str = settings.log_file,
+    level: str = settings.log_level,
 ):
     """
     Create or retrieve a Loguru logger bound with contextual metadata.
@@ -51,10 +51,10 @@ def setup_logger(
         Directory where log files will be stored.
 
     log_name : str
-        Name of the rotating log file.
+        Name of the rotating log file. Defaults to `settings.log_file`.
 
     level : str
-        Logging level (DEBUG, INFO, WARNING, ERROR).
+        Logging level (DEBUG, INFO, WARNING, ERROR). Defaults to `settings.log_level`.
 
     Why this implementation?
     -------------------------

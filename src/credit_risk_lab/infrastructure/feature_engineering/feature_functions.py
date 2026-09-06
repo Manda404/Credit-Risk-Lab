@@ -38,18 +38,28 @@ def add_income_features(df: DataFrame) -> DataFrame:
         Dataset enrichi des variables :
         - dti
         - log_income
-        - estimated_monthly_payment
-        - payment_to_income
+        - estimated_monthly_interest
+        - interest_to_income
+        - income_per_experience_year
     """
     df["dti"] = df["loan_amnt"] / df["person_income"].replace(0, np.nan)
     df["log_income"] = np.log1p(df["person_income"].clip(lower=0))
 
     monthly_rate = (df["loan_int_rate"] / 100) / 12
-    df["estimated_monthly_payment"] = df["loan_amnt"] * monthly_rate
+    # Loan term is absent from this teaching dataset, so an amortizing monthly
+    # payment cannot be computed. This variable is explicitly an interest-only
+    # proxy and must not be presented to decision makers as a real instalment.
+    df["estimated_monthly_interest"] = df["loan_amnt"] * monthly_rate
 
-    df["payment_to_income"] = df["estimated_monthly_payment"] / (
+    df["interest_to_income"] = df["estimated_monthly_interest"] / (
         (df["person_income"] / 12).replace(0, np.nan)
     )
+
+    # Career earnings efficiency: income per year of professional experience.
+    # Distinct from person_income alone (a young high earner and an older
+    # average earner can share the same income but very different values here),
+    # which a tree model cannot recover from income or experience in isolation.
+    df["income_per_experience_year"] = df["person_income"] / (df["person_emp_exp"] + 1)
 
     return df
 
@@ -60,8 +70,13 @@ def add_income_features(df: DataFrame) -> DataFrame:
 def add_credit_score_features(df: DataFrame) -> DataFrame:
     """
     Ajoute les variables liées au credit score :
-    - credit_score_band : segmentation FICO-like
-    - norm_credit_score : z-score normalisé
+    - credit_score_band : segmentation FICO-like (bornes fixes, non calculées sur les données)
+
+    Le score brut est déjà standardisé de façon leakage-safe par le
+    ``ColumnTransformer`` (fit sur train uniquement, voir ``infrastructure.modeling.preprocessing``).
+    Un z-score calculé ici recalculerait moyenne/écart-type sur le DataFrame reçu
+    (train+validation+test au moment de l'appel), ce qui constituerait une fuite
+    statistique vers le train. Il n'est donc pas dupliqué dans cette étape déterministe.
 
     Paramètres
     ----------
@@ -71,7 +86,7 @@ def add_credit_score_features(df: DataFrame) -> DataFrame:
     Retour
     ------
     DataFrame
-        Dataset enrichi avec credit_score_band & norm_credit_score.
+        Dataset enrichi avec credit_score_band.
     """
     df["credit_score_band"] = pd.cut(
         df["credit_score"],
@@ -80,9 +95,10 @@ def add_credit_score_features(df: DataFrame) -> DataFrame:
         include_lowest=True,
     )
 
-    mean_score = df["credit_score"].mean()
-    std_score = df["credit_score"].std(ddof=0) or 1
-    df["norm_credit_score"] = (df["credit_score"] - mean_score) / std_score
+    # Interest rate charged per point of credit score: a pricing-efficiency
+    # signal distinct from either variable alone — two borrowers with the same
+    # score can be priced very differently, and this ratio surfaces that gap.
+    df["rate_per_score_point"] = df["loan_int_rate"] / df["credit_score"].replace(0, np.nan)
 
     return df
 
@@ -129,7 +145,7 @@ def add_loan_features(df: DataFrame) -> DataFrame:
         "HOMEIMPROVEMENT": 1,
         "DEBTCONSOLIDATION": 2,
     }
-    df["loan_intent_risk"] = df["loan_intent"].map(intent_map).fillna(1)
+    df["loan_intent_risk"] = df["loan_intent"].map(intent_map)
     return df
 
 
@@ -141,6 +157,8 @@ def add_credit_history_features(df: DataFrame) -> DataFrame:
     Ajoute les features liées à l'historique de crédit :
     - credit_hist_to_age
     - credit_hist_category
+    - age_first_credit
+    - emp_credit_hist_gap
     """
     df["credit_hist_to_age"] = df["cb_person_cred_hist_length"] / df[
         "person_age"
@@ -152,6 +170,16 @@ def add_credit_history_features(df: DataFrame) -> DataFrame:
         labels=["0-3", "4-7", "8-15", "15+"],
         include_lowest=True,
     )
+
+    # Classic credit-bureau feature: the age at which credit history began.
+    # An unusually young value can indicate an inconsistent or thin file.
+    df["age_first_credit"] = df["person_age"] - df["cb_person_cred_hist_length"]
+
+    # Whether employment tenure runs ahead of or behind credit tenure — a
+    # consistency signal that neither ratio-to-age feature above captures,
+    # since both are anchored on age rather than on each other.
+    df["emp_credit_hist_gap"] = df["person_emp_exp"] - df["cb_person_cred_hist_length"]
+
     return df
 
 
@@ -168,7 +196,7 @@ def add_default_features(df: DataFrame) -> DataFrame:
         df["previous_loan_defaults_on_file"].astype(str).str.upper().eq("YES")
     ).astype(int)
 
-    df["risky_default_score"] = df["has_default_before"] * (650 - df["credit_score"])
+    df["risky_default_score"] = df["has_default_before"] * (650 - df["credit_score"]).clip(lower=0)
 
     return df
 
@@ -185,7 +213,7 @@ def add_business_encoding(df: DataFrame) -> DataFrame:
     """
     home_map = {"OWN": 2, "MORTGAGE": 1, "RENT": 0, "OTHER": 0}
     df["home_risk"] = (
-        df["person_home_ownership"].astype(str).str.upper().map(home_map).fillna(0)
+        df["person_home_ownership"].astype(str).str.upper().map(home_map)
     )
 
     edu_map = {
@@ -195,7 +223,7 @@ def add_business_encoding(df: DataFrame) -> DataFrame:
         "Master": 3,
         "Doctorate": 4,
     }
-    df["edu_level"] = df["person_education"].map(edu_map).fillna(0)
+    df["edu_level"] = df["person_education"].map(edu_map)
 
     df["is_female"] = df["person_gender"].astype(str).str.lower().eq("female").astype(int)
 
@@ -203,7 +231,35 @@ def add_business_encoding(df: DataFrame) -> DataFrame:
 
 
 # ==========================================================
-# 8. INTERACTION FEATURES
+# 8. AGGREGATE RISK FLAGS
+# ==========================================================
+def add_risk_flags(df: DataFrame) -> DataFrame:
+    """
+    Ajoute un score composite ``risk_flags_count`` : le nombre d'indicateurs
+    de risque métier classiques déclenchés simultanément (0 à 5) :
+    défaut antérieur, score de crédit subprime (<580), taux d'endettement
+    élevé (>40 % du revenu), statut locataire, motif de consolidation de dette.
+
+    Contrairement aux ratios ci-dessus, ce n'est pas une transformation
+    monotone d'une seule colonne existante : c'est un décompte de conditions
+    indépendantes, donc une information réellement nouvelle pour un modèle
+    à arbres (invariant aux transformations monotones d'une variable seule).
+
+    Nécessite que ``has_default_before`` ait déjà été calculé
+    (voir ``add_default_features``), appelé avant cette fonction dans le pipeline.
+    """
+    df["risk_flags_count"] = (
+        df["has_default_before"]
+        + (df["credit_score"] < 580).astype(int)
+        + (df["loan_percent_income"] > 0.40).astype(int)
+        + df["person_home_ownership"].astype(str).str.upper().eq("RENT").astype(int)
+        + df["loan_intent"].astype(str).str.upper().eq("DEBTCONSOLIDATION").astype(int)
+    )
+    return df
+
+
+# ==========================================================
+# 9. INTERACTION FEATURES
 # ==========================================================
 def add_interaction_features(df: DataFrame) -> DataFrame:
     """
@@ -220,13 +276,15 @@ def add_interaction_features(df: DataFrame) -> DataFrame:
 
 
 # ==========================================================
-# 9. SANITY CHECKS AND FINAL CLEANING 
+# 10. SANITY CHECKS AND FINAL CLEANING
 # ==========================================================
 def sanitize_features(df: DataFrame) -> DataFrame:
     """Nettoie les inf, -inf et applique quelques corrections métiers."""
     df = df.replace([np.inf, -np.inf], np.nan)
     df["dti"] = df["dti"].clip(lower=0)
-    df["payment_to_income"] = df["payment_to_income"].clip(lower=0)
+    df["interest_to_income"] = df["interest_to_income"].clip(lower=0)
     df["exp_to_age"] = df["exp_to_age"].clip(lower=0)
     df["credit_hist_to_age"] = df["credit_hist_to_age"].clip(lower=0)
+    df["income_per_experience_year"] = df["income_per_experience_year"].clip(lower=0)
+    df["age_first_credit"] = df["age_first_credit"].clip(lower=0)
     return df
