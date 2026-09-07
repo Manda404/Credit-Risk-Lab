@@ -6,7 +6,7 @@ import nbformat as nbf
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEV = ROOT / "dev"
+NOTEBOOKS_DIR = ROOT / "notebooks"
 
 
 def markdown(text: str):
@@ -1246,11 +1246,11 @@ NOTEBOOKS = {
 
 def main() -> None:
     """Replace notebooks with the canonical progressive execution sequence."""
-    DEV.mkdir(exist_ok=True)
-    for old in DEV.glob("*.ipynb"):
+    NOTEBOOKS_DIR.mkdir(exist_ok=True)
+    for old in NOTEBOOKS_DIR.glob("*.ipynb"):
         old.unlink()
     for filename, nb in NOTEBOOKS.items():
-        nbf.write(nb, DEV / filename)
+        nbf.write(nb, NOTEBOOKS_DIR / filename)
         print(f"Wrote {filename}")
 
 

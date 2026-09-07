@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 
-DEV = Path(__file__).resolve().parents[1] / "dev"
+NOTEBOOKS_DIR = Path(__file__).resolve().parents[1] / "notebooks"
 FORBIDDEN_SNIPPETS = (
     "sys.path",
     "MPLCONFIGDIR",
@@ -25,14 +25,14 @@ def notebook_code_cells(path: Path) -> list[str]:
 
 
 def test_notebooks_do_not_hide_steps_behind_large_workflows():
-    for path in DEV.glob("*.ipynb"):
+    for path in NOTEBOOKS_DIR.glob("*.ipynb"):
         source = "\n".join(notebook_code_cells(path))
         for snippet in FORBIDDEN_SNIPPETS:
             assert snippet not in source, f"{snippet!r} found in {path.name}"
 
 
 def test_notebook_code_cells_are_syntactically_valid():
-    for path in DEV.glob("*.ipynb"):
+    for path in NOTEBOOKS_DIR.glob("*.ipynb"):
         for cell_source in notebook_code_cells(path):
             ast.parse(cell_source)
 
@@ -54,7 +54,9 @@ def test_notebooks_import_package_components_explicitly():
         "CreditRiskMLOpsPipeline",
     }
     source = "\n".join(
-        cell for path in DEV.glob("*.ipynb") for cell in notebook_code_cells(path)
+        cell
+        for path in NOTEBOOKS_DIR.glob("*.ipynb")
+        for cell in notebook_code_cells(path)
     )
     for component in expected_imports:
         assert component in source

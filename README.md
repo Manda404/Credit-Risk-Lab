@@ -1,4 +1,4 @@
-# Credit Risk Lab
+# 🏦 Credit Risk Lab  
 
 Credit Risk Lab est un projet end-to-end de Machine Learning et MLOps pour le
 scoring du risque credit. L'objectif est de construire un pipeline
@@ -33,6 +33,44 @@ credit doit aussi permettre de comprendre :
 - quel est le niveau de calibration des probabilites ;
 - si certaines variables sensibles sont exclues de l'entrainement ;
 - si le pipeline peut etre rejoue de maniere reproductible.
+
+## Dataset
+
+Le projet utilise le dataset
+[Kaggle - Loan Approval Classification](https://www.kaggle.com/datasets/taweilo/loan-approval-classification-data),
+un dataset synthetique de classification binaire applique a l'approbation de
+prets. Il contient 45 000 observations et 14 variables melangeant informations
+client, situation financiere, historique credit et caracteristiques du pret.
+
+Le dataset est une version synthetique inspiree de donnees credit risk et
+enrichie via SMOTENC afin d'augmenter le nombre d'instances tout en conservant
+une structure compatible avec des variables numeriques et categorielles.
+
+Point important : la documentation Kaggle presente `loan_status` comme un statut
+d'approbation (`1 = approved`, `0 = rejected`). Dans ce projet, la variable est
+utilisee comme target de classification pour construire un pipeline de decision
+credit risk. Les libelles metier affiches dans le projet (`low_risk`,
+`high_risk`) sont donc une convention de modelisation du lab, pas une
+certification de defaut reel.
+
+Principales variables :
+
+| Colonne | Description |
+| --- | --- |
+| `person_age` | Age du demandeur |
+| `person_gender` | Genre du demandeur |
+| `person_education` | Niveau d'education |
+| `person_income` | Revenu annuel |
+| `person_emp_exp` | Annees d'experience professionnelle |
+| `person_home_ownership` | Statut de logement |
+| `loan_amnt` | Montant du pret demande |
+| `loan_intent` | Motif du pret |
+| `loan_int_rate` | Taux d'interet |
+| `loan_percent_income` | Part du revenu representee par le pret |
+| `cb_person_cred_hist_length` | Anciennete de l'historique credit |
+| `credit_score` | Score credit |
+| `previous_loan_defaults_on_file` | Indicateur de defauts anterieurs |
+| `loan_status` | Target binaire issue du dataset source |
 
 ## Ce Que Le Projet Demontre
 
@@ -92,14 +130,14 @@ src/credit_risk_lab/
     api_simulation.py         # simulation d'appels
 ```
 
-Les notebooks dans `dev/` importent ces classes et fonctions. Ils ne portent pas
+Les notebooks dans `notebooks/` importent ces classes et fonctions. Ils ne portent pas
 la logique principale du projet.
 
 ## Pipeline MLOps
 
 ### 1. Data Understanding
 
-Notebook : `dev/01_data_understanding.ipynb`
+Notebook : `notebooks/01_data_understanding.ipynb`
 
 Objectif :
 
@@ -111,7 +149,7 @@ Objectif :
 
 ### 2. Data Quality
 
-Notebook : `dev/02_data_quality.ipynb`
+Notebook : `notebooks/02_data_quality.ipynb`
 
 Objectif :
 
@@ -123,7 +161,7 @@ Objectif :
 
 ### 3. Split, Drift Et Feature Engineering
 
-Notebook : `dev/03_split_drift_feature_engineering.ipynb`
+Notebook : `notebooks/03_split_drift_feature_engineering.ipynb`
 
 Objectif :
 
@@ -141,7 +179,7 @@ Objectif :
 
 ### 4. Baseline Model Selection
 
-Notebook : `dev/04_preprocessing_and_training.ipynb`
+Notebook : `notebooks/04_preprocessing_and_training.ipynb`
 
 Objectif :
 
@@ -154,7 +192,7 @@ Objectif :
 
 ### 5. Hyperparameter Tuning
 
-Notebook : `dev/05_hyperparameter_tuning.ipynb`
+Notebook : `notebooks/05_hyperparameter_tuning.ipynb`
 
 Objectif :
 
@@ -168,7 +206,7 @@ Objectif :
 
 ### 6. Evaluation Finale
 
-Notebook : `dev/06_model_evaluation_and_persistence.ipynb`
+Notebook : `notebooks/06_model_evaluation_and_persistence.ipynb`
 
 Objectif :
 
@@ -184,7 +222,7 @@ Objectif :
 
 ### 7. Batch Et Realtime Inference
 
-Notebook : `dev/07_batch_and_realtime_inference.ipynb`
+Notebook : `notebooks/07_batch_and_realtime_inference.ipynb`
 
 Objectif :
 
@@ -197,7 +235,7 @@ Objectif :
 
 ### 8. CI/CD MLOps Pipeline
 
-Notebook : `dev/08_end_to_end_mlops_pipeline.ipynb`
+Notebook : `notebooks/08_end_to_end_mlops_pipeline.ipynb`
 
 Objectif :
 
@@ -370,3 +408,8 @@ Ce projet montre une demarche complete de Senior ML Engineer / MLOps Engineer :
 partir d'un probleme credit risk, structurer le code en architecture propre,
 proteger la reproductibilite, entrainer et optimiser un modele, evaluer avec des
 metriques metier avancees, puis preparer l'inference et le deploiement.
+
+## Auteur
+
+**Manda Surel**  
+Machine Learning Engineer — Credit Risk & MLOps
