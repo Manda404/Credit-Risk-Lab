@@ -5,13 +5,15 @@ from pathlib import Path
 from typing import Iterator
 import mlflow
 
+from credit_risk_lab.config.settings import settings
+
 
 @contextmanager
 def tracked_run(
     *,
-    experiment_name: str,
     run_name: str,
     parameters: dict,
+    experiment_name: str | None = None,
     tags: dict[str, str] | None = None,
     tracking_uri: str | None = None,
 ) -> Iterator[mlflow.ActiveRun]:
@@ -21,10 +23,10 @@ def tracked_run(
     deployment should pass a shared tracking URI with access control, retention,
     registry permissions, and backup.
     """
-    if tracking_uri:
-        mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(experiment_name)
-    with mlflow.start_run(run_name=run_name, tags=tags or {}) as run:
+    mlflow.set_tracking_uri(tracking_uri or settings.mlflow_tracking_uri)
+    mlflow.set_experiment(experiment_name or settings.mlflow_experiment_name)
+    resolved_tags = {"environment": settings.environment, **(tags or {})}
+    with mlflow.start_run(run_name=run_name, tags=resolved_tags) as run:
         mlflow.log_params({k: str(v) for k, v in parameters.items()})
         yield run
 

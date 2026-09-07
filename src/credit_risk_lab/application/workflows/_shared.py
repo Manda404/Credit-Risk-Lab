@@ -26,9 +26,16 @@ def load_train_dataset() -> pd.DataFrame:
     return CSVDatasetRepository(CSVDataSourceConfig(path=settings.train_path)).load()
 
 
+def load_raw_train_dataset() -> pd.DataFrame:
+    """Load the raw train partition created before exploratory analysis."""
+    return CSVDatasetRepository(
+        CSVDataSourceConfig(path=settings.raw_train_path)
+    ).load()
+
+
 def load_external_test_dataset() -> pd.DataFrame:
     """Load the persisted raw external test partition."""
-    return CSVDatasetRepository(CSVDataSourceConfig(path=settings.test_path)).load()
+    return CSVDatasetRepository(CSVDataSourceConfig(path=settings.raw_test_path)).load()
 
 
 def current_git_commit() -> str:

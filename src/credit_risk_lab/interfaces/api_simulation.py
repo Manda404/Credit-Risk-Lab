@@ -25,7 +25,7 @@ class ApiSimulationResult:
 def run_api_simulation(limit: int = 10) -> ApiSimulationResult:
     """Exercise the FastAPI app through its public HTTP contract."""
     test_raw = (
-        CSVDatasetRepository(CSVDataSourceConfig(path=settings.test_path))
+        CSVDatasetRepository(CSVDataSourceConfig(path=settings.raw_test_path))
         .load()
         .head(limit)
     )

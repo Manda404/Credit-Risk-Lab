@@ -10,11 +10,14 @@ import `settings` and read the corresponding property instead.
 Values are loaded, in increasing priority, from:
 1. the field defaults below,
 2. ``configs/settings.yaml`` (versioned, shared across the team),
-3. ``.env`` (local overrides),
-4. ``CRL_``-prefixed environment variables (deployment overrides).
+3. ``configs/environments/{environment}.yaml`` (environment overrides),
+4. ``.env`` (local overrides),
+5. ``CRL_``-prefixed environment variables (deployment overrides).
 """
 
+import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import (
@@ -23,9 +26,28 @@ from pydantic_settings import (
     SettingsConfigDict,
     YamlConfigSettingsSource,
 )
+from dotenv import dotenv_values
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 _CONFIG_YAML = _PROJECT_ROOT / "configs" / "settings.yaml"
+_ENV_CONFIG_DIR = _PROJECT_ROOT / "configs" / "environments"
+
+
+def _active_environment() -> str:
+    """Resolve the active environment before Pydantic sources are built."""
+    dotenv = dotenv_values(_PROJECT_ROOT / ".env")
+    return (
+        os.getenv("CRL_ENVIRONMENT")
+        or os.getenv("CRL_ENV")
+        or dotenv.get("CRL_ENVIRONMENT")
+        or dotenv.get("CRL_ENV")
+        or "development"
+    )
+
+
+def _environment_yaml_path() -> Path:
+    """Return the YAML override file for the active environment."""
+    return _ENV_CONFIG_DIR / f"{_active_environment()}.yaml"
 
 
 class Settings(BaseSettings):
@@ -41,6 +63,7 @@ class Settings(BaseSettings):
 
     project_name: str = "Credit Risk Lab"
     project_version: str = "0.2.0"
+    environment: Literal["development", "staging", "production"] = "development"
     project_root: Path = Field(default_factory=lambda: _PROJECT_ROOT)
 
     target_column: str = "loan_status"
@@ -57,6 +80,12 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
     log_file: str = "credit_risk_lab.log"
+    processed_subdir: Path = Path("processed")
+    models_subdir: Path = Path("models")
+    reports_subdir: Path = Path("reports")
+    logs_subdir: Path = Path("logs")
+    mlflow_tracking_uri: str = "file:./mlruns/development"
+    mlflow_experiment_name: str = "credit-risk-lab-development"
 
     raw_data_path_config: Path = Field(
         default=Path("data/raw/loan_data.csv"),
@@ -64,8 +93,11 @@ class Settings(BaseSettings):
     )
     raw_data_sep: str = ","
     raw_data_encoding: str = "utf-8"
+    raw_train_file: str = "train.csv"
+    raw_test_file: str = "test.csv"
     modeling_dataset_file: str = "modeling_dataset.csv"
     train_file: str = "train.csv"
+    validation_file: str = "validation.csv"
     test_file: str = "test.csv"
 
     model_bundle_file: str = "best_boosting_model.joblib"
@@ -87,6 +119,10 @@ class Settings(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
+            YamlConfigSettingsSource(
+                settings_cls,
+                yaml_file=_environment_yaml_path(),
+            ),
             YamlConfigSettingsSource(settings_cls),
             file_secret_settings,
         )
@@ -104,19 +140,19 @@ class Settings(BaseSettings):
 
     @property
     def processed_dir(self) -> Path:
-        return self.data_dir / "processed"
+        return self.data_dir / self.processed_subdir
 
     @property
     def models_dir(self) -> Path:
-        return self.project_root / "models"
+        return self.project_root / self.models_subdir
 
     @property
     def logs_dir(self) -> Path:
-        return self.project_root / "logs"
+        return self.project_root / self.logs_subdir
 
     @property
     def reports_dir(self) -> Path:
-        return self.project_root / "reports"
+        return self.project_root / self.reports_subdir
 
     # ------------------------------------------------------------
     # Concrete file paths
@@ -128,12 +164,24 @@ class Settings(BaseSettings):
         return path if path.is_absolute() else self.project_root / path
 
     @property
+    def raw_train_path(self) -> Path:
+        return self.raw_dir / self.raw_train_file
+
+    @property
+    def raw_test_path(self) -> Path:
+        return self.raw_dir / self.raw_test_file
+
+    @property
     def modeling_dataset_path(self) -> Path:
         return self.processed_dir / self.modeling_dataset_file
 
     @property
     def train_path(self) -> Path:
         return self.processed_dir / self.train_file
+
+    @property
+    def validation_path(self) -> Path:
+        return self.processed_dir / self.validation_file
 
     @property
     def test_path(self) -> Path:

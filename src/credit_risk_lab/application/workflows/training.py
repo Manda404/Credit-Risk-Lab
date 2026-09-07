@@ -64,7 +64,7 @@ def run_training_workflow() -> TrainingWorkflowResult:
             "selection_metric": settings.selection_metric,
             "split_strategy": result.split_strategy,
             "training_dataset_sha256": sha256_file(settings.train_path),
-            "external_test_dataset_sha256": sha256_file(settings.test_path),
+            "external_test_dataset_sha256": sha256_file(settings.raw_test_path),
             "models_config_sha256": sha256_file(settings.models_config_path),
             "git_commit": current_git_commit(),
             "target_definition": "loan_status=1 is the synthetic positive risk class",

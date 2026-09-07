@@ -1,5 +1,11 @@
 """Small public API for configured training, preprocessing, and artifacts."""
 
+from .boosting_trainer import (
+    BestModelSelector,
+    BoostingModelTrainer,
+    CandidateTrainingResult,
+)
+from .credit_risk_preprocessor import CreditRiskPreprocessor
 from .preprocessing import build_preprocessor
 from .artifacts import (
     load_model_bundle,
@@ -19,8 +25,12 @@ from .wrappers import (
 )
 
 __all__ = [
+    "BestModelSelector",
+    "BoostingModelTrainer",
     "build_configured_models",
     "build_preprocessor",
+    "CandidateTrainingResult",
+    "CreditRiskPreprocessor",
     "load_models_config",
     "save_model_bundle",
     "load_model_bundle",

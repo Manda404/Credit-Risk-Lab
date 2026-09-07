@@ -10,6 +10,7 @@
 
 project_name: "Credit Risk Lab"
 project_version: "0.2.0"
+environment: "development"
 
 target_column: "loan_status"
 random_state: 42
@@ -33,14 +34,23 @@ sensitive_columns:
 
 log_level: "INFO"
 log_file: "credit_risk_lab.log"
+processed_subdir: "processed"
+models_subdir: "models"
+reports_subdir: "reports"
+logs_subdir: "logs"
+mlflow_tracking_uri: "file:./mlruns/development"
+mlflow_experiment_name: "credit-risk-lab-development"
 
 # Raw source location relative to the project root. The resolved local path is
 # available as settings.raw_data_path.
 raw_data_path: "data/raw/loan_data.csv"
 raw_data_sep: ","
 raw_data_encoding: "utf-8"
+raw_train_file: "train.csv"
+raw_test_file: "test.csv"
 modeling_dataset_file: "modeling_dataset.csv"
 train_file: "train.csv"
+validation_file: "validation.csv"
 test_file: "test.csv"
 
 model_bundle_file: "best_boosting_model.joblib"

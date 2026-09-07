@@ -28,7 +28,11 @@ app = FastAPI(
 @app.get("/health")
 def health() -> dict[str, str]:
     """Return service liveness for Docker and cloud health checks."""
-    return {"status": "ok", "service": settings.project_name}
+    return {
+        "status": "ok",
+        "service": settings.project_name,
+        "environment": settings.environment,
+    }
 
 
 @app.get("/ready")
@@ -37,6 +41,7 @@ def ready() -> dict[str, str]:
     scorer = get_scorer()
     return {
         "status": "ready",
+        "environment": settings.environment,
         "model": scorer.model_scorer.bundle["metadata"]["model_name"],
     }
 

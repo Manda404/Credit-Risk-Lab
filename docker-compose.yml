@@ -4,6 +4,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      CRL_ENVIRONMENT: ${CRL_ENVIRONMENT:-development}
       CRL_LOG_LEVEL: INFO
     restart: unless-stopped
 

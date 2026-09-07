@@ -1,5 +1,6 @@
 """Notebook- and CLI-friendly application workflows."""
 
+from ._shared import current_git_commit
 from .evaluation import ExternalEvaluationResult, run_external_evaluation_workflow
 from .feature_engineering import (
     FeatureEngineeringResult,
@@ -15,6 +16,7 @@ __all__ = [
     "SourceQualityResult",
     "SplitAndDriftResult",
     "TrainingWorkflowResult",
+    "current_git_commit",
     "run_external_evaluation_workflow",
     "run_feature_engineering_workflow",
     "run_source_quality_workflow",

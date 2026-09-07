@@ -1,0 +1,9 @@
+# Production must use promoted artifacts and deployment-managed overrides.
+environment: "production"
+log_level: "WARNING"
+processed_subdir: "production/processed"
+models_subdir: "models/production"
+reports_subdir: "reports/production"
+logs_subdir: "logs/production"
+mlflow_tracking_uri: "file:./mlruns/production"
+mlflow_experiment_name: "credit-risk-lab-production"

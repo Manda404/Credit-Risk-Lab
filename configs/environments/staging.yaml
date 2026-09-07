@@ -1,0 +1,9 @@
+# Staging isolates generated artifacts from development and production.
+environment: "staging"
+log_level: "INFO"
+processed_subdir: "staging/processed"
+models_subdir: "models/staging"
+reports_subdir: "reports/staging"
+logs_subdir: "logs/staging"
+mlflow_tracking_uri: "file:./mlruns/staging"
+mlflow_experiment_name: "credit-risk-lab-staging"

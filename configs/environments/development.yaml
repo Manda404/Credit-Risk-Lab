@@ -1,0 +1,9 @@
+# Development keeps the historical local paths used by notebooks and tests.
+environment: "development"
+log_level: "DEBUG"
+processed_subdir: "processed"
+models_subdir: "models"
+reports_subdir: "reports"
+logs_subdir: "logs"
+mlflow_tracking_uri: "file:./mlruns/development"
+mlflow_experiment_name: "credit-risk-lab-development"

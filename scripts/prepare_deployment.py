@@ -19,7 +19,7 @@ def main() -> None:
     print(
         "Prepared "
         f"train={len(drift.train)}, "
-        f"external_test={len(drift.external_test)}, "
+        f"validation={len(drift.validation)}, "
         f"model={training.selected_model_name}"
     )
 

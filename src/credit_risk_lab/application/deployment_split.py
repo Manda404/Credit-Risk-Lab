@@ -28,7 +28,7 @@ def create_deployment_split(
     target_column: str = settings.target_column,
     random_state: int = settings.random_state,
     train_path: Path = settings.train_path,
-    test_path: Path = settings.test_path,
+    test_path: Path = settings.validation_path,
 ) -> DeploymentSplitResult:
     """Clean and stratify a 90/10 external holdout.
 

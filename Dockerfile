@@ -13,7 +13,7 @@ RUN groupadd --system app && useradd --system --gid app --home /app app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY configs ./configs
-COPY models/best_boosting_model.joblib ./models/best_boosting_model.joblib
+COPY models ./models
 
 RUN pip install --upgrade pip && \
     pip install .

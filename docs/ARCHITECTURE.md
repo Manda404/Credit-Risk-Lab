@@ -3,7 +3,8 @@
 Ce projet suit une orientation Clean Architecture pour séparer les règles
 métier crédit, les cas d’usage applicatifs, les détails techniques et les
 points d’entrée utilisateur. Les notebooks ne portent plus la logique du
-projet : ils exécutent les workflows exposés par `src/credit_risk_lab`.
+projet : ils instancient et exécutent explicitement les composants exposés par
+`src/credit_risk_lab`.
 
 ## Vue d’ensemble
 
@@ -82,15 +83,13 @@ FastAPI, joblib, MLflow, Docker, notebooks, fichiers CSV ou chemins locaux.
 
 ## Application
 
-La couche application orchestre les cas d’usage.
+La couche application orchestre les cas d’usage et expose aussi des composants
+utilisables étape par étape depuis les notebooks.
 
-Les workflows exposent une API simple pour les notebooks :
-
-```python
-from credit_risk_lab.application.workflows import run_training_workflow
-
-result = run_training_workflow()
-```
+Les workflows restent disponibles pour les scripts, la CLI, les tests
+d’intégration et l’automatisation future. Les notebooks privilégient désormais
+les classes et méthodes explicites afin de montrer la construction progressive
+du pipeline.
 
 Workflows disponibles :
 
@@ -129,21 +128,27 @@ Les interfaces sont les points d’entrée :
 - API FastAPI dans `interfaces/api.py` ;
 - simulation API dans `interfaces/api_simulation.py`.
 
-Elles doivent rester fines. Leur rôle est de recevoir une demande, appeler un
-workflow ou un use case, puis afficher ou retourner le résultat.
+Elles doivent rester fines. Leur rôle est de recevoir une demande, instancier
+les composants nécessaires, appeler des méthodes publiques, puis afficher ou
+retourner le résultat.
 
 ## Rôle des notebooks
 
 Les notebooks sont réservés à l’exécution, à l’inspection et à la visualisation.
-Ils ne doivent pas contenir la logique principale du projet.
+Ils ne doivent pas contenir la logique principale du projet, mais ils doivent
+montrer clairement les briques utilisées.
 
 Forme attendue :
 
 ```python
-from credit_risk_lab.application.workflows import run_source_quality_workflow
+from credit_risk_lab.infrastructure.data_sources import CsvLoanDataLoader
+from credit_risk_lab.infrastructure.analytics import DatasetInspector
 
-result = run_source_quality_workflow()
-result.summary
+loader = CsvLoanDataLoader(path=settings.raw_data_path)
+raw_df = loader.load()
+
+inspector = DatasetInspector(raw_df)
+inspector.summary()
 ```
 
 Ce qui ne doit pas revenir dans les notebooks :
@@ -151,8 +156,8 @@ Ce qui ne doit pas revenir dans les notebooks :
 - reconstruction manuelle de chemins ;
 - `sys.path.insert(...)` ;
 - logique de split détaillée ;
-- entraînement manuel modèle par modèle ;
-- sauvegarde joblib directement depuis une cellule ;
+- entraînement manuel réimplémenté dans les cellules ;
+- sauvegarde joblib hors repository dédié ;
 - règles métier dupliquées.
 
 Si une cellule devient longue, elle doit probablement devenir une fonction ou
@@ -160,18 +165,38 @@ une classe dans `src/credit_risk_lab`.
 
 ## Flux principaux
 
+## Séquence des notebooks
+
+```text
+01_data_understanding.ipynb
+02_data_quality.ipynb
+03_split_drift_feature_engineering.ipynb
+04_preprocessing_and_training.ipynb
+05_model_evaluation_and_persistence.ipynb
+06_inference_and_api_simulation.ipynb
+```
+
+Chaque notebook est reproductible seul à partir des données, chemins et bundles
+exposés par `settings` et les repositories. La progression est conceptuelle,
+pas une dépendance fragile à l’état mémoire du notebook précédent.
+
 ### Préparation du holdout et drift
 
 ```text
 raw CSV
   │
   ▼
-run_split_and_drift_workflow()
+CsvLoanDataLoader
+  │
+  ▼
+CreditRiskQualityChecker.clean()
+  │
+  ▼
+DatasetSplitter.split()
   │
   ├── clean / split 90-10
-  ├── persist train.csv et test.csv
-  ├── compute drift report
-  └── persist reports drift
+  ├── CSVDatasetRepository.save()
+  └── DriftAnalyzer.report_frame()
 ```
 
 ### Entraînement
@@ -183,11 +208,13 @@ train.csv
 LoanFeatureEngineer
   │
   ▼
-TrainBoostingModelsUseCase
+CreditRiskPreprocessor.fit_transform()
   │
-  ├── train / validation / test interne
-  ├── sélection du meilleur modèle
-  └── persistence du bundle joblib
+  ▼
+BoostingModelTrainer.fit()
+  │
+  ▼
+BestModelSelector.select()
 ```
 
 ### Inférence API
@@ -209,17 +236,24 @@ RawLoanScorer
 ## Configuration
 
 La configuration versionnée est dans `configs/settings.yaml` et
-`configs/models.yaml`.
+`configs/models.yaml`. Les overrides propres à chaque runtime sont dans
+`configs/environments/`.
 
 `settings.py` centralise les chemins et expose des propriétés comme :
 
 - `settings.raw_data_path`
+- `settings.raw_train_path`
+- `settings.raw_test_path`
 - `settings.train_path`
-- `settings.test_path`
+- `settings.validation_path`
 - `settings.model_bundle_path`
 - `settings.reports_dir`
 
 Le code et les notebooks ne doivent pas reconstruire ces chemins à la main.
+
+La stratégie MLOps de reproductibilité et de séparation
+`development / staging / production` est documentée dans
+`docs/MLOPS_REPRODUCIBILITY.md`.
 
 ## Python 3.14 et CatBoost
 

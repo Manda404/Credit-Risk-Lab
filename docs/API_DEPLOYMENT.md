@@ -30,11 +30,12 @@ de coût métier ; elle ne nécessite pas de réentraîner le modèle.
 ## Préparer les données et le modèle
 
 ```bash
-PYTHONPATH=src poetry run python scripts/prepare_deployment.py
+CRL_ENVIRONMENT=development poetry run python scripts/prepare_deployment.py
 ```
 
-Cette commande recrée `data/processed/train.csv`, `test.csv` et le bundle sans
-jamais entraîner sur les 10 % réservés à la simulation.
+Cette commande recrée les partitions et le bundle dans les chemins de
+l'environnement actif sans jamais entraîner sur les 10 % réservés à la
+simulation.
 
 Elle calcule aussi le drift entre les deux partitions et génère :
 
@@ -48,7 +49,7 @@ Elle calcule aussi le drift entre les deux partitions et génère :
 Terminal 1 :
 
 ```bash
-PYTHONPATH=src poetry run uvicorn credit_risk_lab.interfaces.api:app --reload
+CRL_ENVIRONMENT=development poetry run uvicorn credit_risk_lab.interfaces.api:app --reload
 ```
 
 Documentation interactive : `http://localhost:8000/docs`. Santé : `/health`.
@@ -56,7 +57,7 @@ Documentation interactive : `http://localhost:8000/docs`. Santé : `/health`.
 Terminal 2 :
 
 ```bash
-PYTHONPATH=src poetry run python scripts/simulate_production.py --interval 2 --limit 20
+CRL_ENVIRONMENT=development poetry run python scripts/simulate_production.py --interval 2 --limit 20
 ```
 
 Utiliser `--interval 0` pour un test rapide ou changer `--url` pour une API
@@ -69,11 +70,21 @@ docker compose up --build api
 docker compose --profile simulation up --build
 ```
 
+Pour démarrer le conteneur avec un autre environnement :
+
+```bash
+CRL_ENVIRONMENT=staging docker compose up --build api
+CRL_ENVIRONMENT=production docker compose up --build api
+```
+
 Pour un cloud gratuit compatible conteneur, construire l’image à partir du
 `Dockerfile`, exposer le port fourni par la variable `PORT`, conserver une seule
 instance sur les petits plans, et ne jamais inclure `test.csv` dans l’image API.
 Le modèle est actuellement intégré à l’image pour obtenir un déploiement
-immuable. Un registre d’artefacts signé sera préférable ensuite.
+immuable. Pour staging ou production, l'image doit contenir ou monter le bundle
+attendu par `settings.model_bundle_path`, par exemple
+`models/production/best_boosting_model.joblib`. Un registre d’artefacts signé
+sera préférable ensuite.
 
 ## Exemple de réponse
 

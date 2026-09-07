@@ -32,19 +32,19 @@ The dataset is synthetic. Results are educational and must not be used for real 
         feature_engineering/# deterministic domain features
         modeling/           # preprocessing, wrappers, persistence
         visualization/      # reusable Plotly figures
-    dev/                    # six ordered, end-to-end notebooks
+    dev/                    # six ordered, progressive execution notebooks
     tests/                  # unit tests
     docs/                   # architecture audit
     reports/                # generated experiment tables
 
 ## Notebooks
 
-- `dev/01_data_source_quality_and_eda.ipynb`: explicit source configuration, quality, cleaning, target, and EDA.
-- `dev/02_external_split_and_drift.ipynb`: persisted 90/10 holdout, PSI/KS/Hellinger, and drift visuals.
-- `dev/03_feature_engineering_and_preprocessing.ipynb`: deterministic features and leakage-safe preprocessing.
-- `dev/04_configured_training_and_persistence.ipynb`: YAML model factory, candidate comparison, selection, and artifact lineage.
-- `dev/05_external_evaluation_and_fairness.ipynb`: untouched external test, calibration, operational threshold, and group diagnostics.
-- `dev/06_api_inference_and_simulation.ipynb`: FastAPI health/readiness, validation, inference, and simulated request stream.
+- `dev/01_data_understanding.ipynb`: explicit loading, column summary, target distribution, and EDA.
+- `dev/02_data_quality.ipynb`: schema checks, quality report, cleaning, and clean-data inspection.
+- `dev/03_split_drift_feature_engineering.ipynb`: external holdout split, persistence, drift, and deterministic features.
+- `dev/04_preprocessing_and_training.ipynb`: development split, train-only preprocessing, candidate training, and selection.
+- `dev/05_model_evaluation_and_persistence.ipynb`: metrics, calibration, fairness, metadata, and explicit bundle persistence.
+- `dev/06_inference_and_api_simulation.ipynb`: bundle loading, raw scoring, Pydantic validation, API prediction, and simulation.
 
 Notebooks contain explanations and orchestration only. Reusable logic belongs in `src/`.
 
@@ -53,12 +53,17 @@ Notebooks contain explanations and orchestration only. Reusable logic belongs in
 
     poetry install
 
-Environment variables use the `CRL_` prefix, for example `CRL_N_ESTIMATORS=200`.
+Environment variables use the `CRL_` prefix. Select the runtime environment
+with `CRL_ENVIRONMENT=development`, `CRL_ENVIRONMENT=staging`, or
+`CRL_ENVIRONMENT=production`.
+
+Environment-specific overrides live in `configs/environments/`. See
+[docs/MLOPS_REPRODUCIBILITY.md](docs/MLOPS_REPRODUCIBILITY.md).
 
 ## Run tests
 
 
-    PYTHONPATH=src poetry run pytest -q
+    poetry run pytest -q
 
 ## Execute all notebooks
 

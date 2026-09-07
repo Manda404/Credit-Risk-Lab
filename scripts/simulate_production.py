@@ -29,7 +29,7 @@ def main() -> None:
     )
     parser.add_argument("--limit", type=int, default=0, help="0 sends every row")
     args = parser.parse_args()
-    frame = pd.read_csv(settings.test_path)
+    frame = pd.read_csv(settings.raw_test_path)
     if args.limit > 0:
         frame = frame.head(args.limit)
     for index, row in frame.iterrows():

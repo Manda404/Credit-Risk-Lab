@@ -57,6 +57,13 @@ def test_prediction_endpoint_returns_auditable_response():
     assert body["threshold_source"] == "configs/settings.yaml:decision_threshold"
 
 
+def test_health_endpoint_exposes_runtime_environment():
+    with TestClient(app) as client:
+        response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["environment"] == settings.environment
+
+
 def test_prediction_endpoint_rejects_implausible_experience():
     payload = raw_application()
     payload["person_age"] = 20
