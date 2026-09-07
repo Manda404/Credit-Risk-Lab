@@ -1,42 +1,26 @@
-"""Model loading and prediction logic used by the HTTP routes."""
+"""Backward-compatible API service imports for older project code.
 
-from datetime import datetime, timezone
-from functools import lru_cache
-from time import perf_counter
-import pandas as pd
+New code should use ``credit_risk_lab.interfaces.api.services`` and
+``credit_risk_lab.interfaces.api.dependencies`` directly. This module preserves
+the old ``predict_application`` entry point to avoid breaking notebooks,
+scripts, or tests that still import it.
+"""
 
-from credit_risk_lab.application import RawLoanScorer
-from credit_risk_lab.config.settings import settings
-from credit_risk_lab.infrastructure.modeling import JoblibModelBundleRepository
-from .api_models import LoanApplication, PredictionResponse
-
-
-@lru_cache(maxsize=1)
-def get_scorer() -> RawLoanScorer:
-    """Load the trusted model once per API process."""
-    repository = JoblibModelBundleRepository()
-    return RawLoanScorer(
-        repository.load(settings.model_bundle_path),
-        threshold=settings.decision_threshold,
-    )
+from credit_risk_lab.interfaces.api.dependencies import get_input_validator, get_scorer
+from credit_risk_lab.interfaces.api.services import PredictionApiService
 
 
-def predict_application(
-    application: LoanApplication, request_id: str
-) -> PredictionResponse:
-    """Engineer features, run inference, and build an auditable response."""
-    start = perf_counter()
-    result = get_scorer().score(pd.DataFrame([application.model_dump()]))
-    decision = int(result.decisions[0])
-    return PredictionResponse(
-        request_id=request_id,
-        model_name=result.model_name,
-        model_version=settings.project_version,
-        probability_of_risk=float(result.probabilities[0]),
-        risk_decision=decision,
-        risk_label="high_risk" if decision else "low_risk",
-        threshold=result.threshold,
-        threshold_source="configs/settings.yaml:decision_threshold",
-        scored_at_utc=datetime.now(timezone.utc),
-        latency_ms=round((perf_counter() - start) * 1000, 3),
-    )
+def predict_application(application, request_id: str):
+    """Score one application through the current API service implementation."""
+    return PredictionApiService(
+        scorer=get_scorer(),
+        validator=get_input_validator(),
+    ).predict_one(application, request_id=request_id)
+
+
+__all__ = [
+    "PredictionApiService",
+    "get_input_validator",
+    "get_scorer",
+    "predict_application",
+]

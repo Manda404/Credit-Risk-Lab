@@ -44,7 +44,11 @@ def test_raw_scorer_runs_feature_engineering_before_prediction():
 
 def test_prediction_endpoint_returns_auditable_response():
     with TestClient(app) as client:
-        response = client.post("/v1/predict", json=raw_application())
+        response = client.post(
+            "/v1/predict",
+            json=raw_application(),
+            headers={"X-Request-ID": "test-request-001"},
+        )
     assert response.status_code == 200
     body = response.json()
     assert {
@@ -54,11 +58,15 @@ def test_prediction_endpoint_returns_auditable_response():
         "probability_of_risk",
         "risk_decision",
         "risk_label",
+        "risk_band",
         "threshold",
         "threshold_source",
+        "validation_warnings",
         "scored_at_utc",
         "latency_ms",
     }.issubset(body)
+    assert response.headers["X-Request-ID"] == "test-request-001"
+    assert body["request_id"] == "test-request-001"
     assert body["threshold"] == settings.decision_threshold
     assert body["threshold_source"] == "configs/settings.yaml:decision_threshold"
 
@@ -68,6 +76,18 @@ def test_health_endpoint_exposes_runtime_environment():
         response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["environment"] == settings.environment
+    assert response.json()["version"] == settings.project_version
+
+
+def test_ready_endpoint_exposes_model_artifact_metadata():
+    with TestClient(app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["model_bundle_path"] == str(settings.model_bundle_path)
+    assert len(body["model_bundle_sha256"]) == 64
 
 
 def test_prediction_endpoint_rejects_implausible_experience():
@@ -77,6 +97,39 @@ def test_prediction_endpoint_rejects_implausible_experience():
     with TestClient(app) as client:
         response = client.post("/v1/predict", json=payload)
     assert response.status_code == 422
+    body = response.json()
+    assert body["error_code"] == "REQUEST_VALIDATION_ERROR"
+    assert "Employment experience is implausible" in str(body["details"])
+
+
+def test_prediction_endpoint_returns_structured_error_for_blank_category():
+    payload = raw_application()
+    payload["loan_intent"] = " "
+
+    with TestClient(app) as client:
+        response = client.post("/v1/predict", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["error_code"] == "INVALID_INFERENCE_INPUT"
+    assert "loan_intent" in response.json()["message"]
+
+
+def test_batch_prediction_endpoint_preserves_order_and_request_id():
+    payload = {"applications": [raw_application(), raw_application()]}
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/predict/batch",
+            json=payload,
+            headers={"X-Request-ID": "batch-request-001"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["request_id"] == "batch-request-001"
+    assert body["rows"] == 2
+    assert len(body["predictions"]) == 2
+    assert body["predictions"][0]["request_id"] == "batch-request-001-000001"
 
 
 def test_deployment_split_returns_ten_percent_without_persisting(tmp_path):

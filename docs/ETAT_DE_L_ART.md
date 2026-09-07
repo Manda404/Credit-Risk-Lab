@@ -55,7 +55,7 @@ Après ce point : aucun entraînement, évaluation, registry ou service.
 - `infrastructure/feature_engineering/` : transformations Pandas.
 - `infrastructure/analytics/` : synthèse, visualisation et drift.
 - `shared/logging.py` : logs console et fichier rotatif.
-- `dev/` et `learn/` : exploration et notes théoriques.
+- `notebooks/` et `learn/` : exploration et notes théoriques.
 
 ### Capacités annoncées mais absentes
 

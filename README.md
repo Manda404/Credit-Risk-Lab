@@ -124,10 +124,13 @@ src/credit_risk_lab/
     visualization/            # figures Plotly reutilisables
 
   interfaces/
-    api.py                    # API FastAPI
-    api_models.py             # schemas Pydantic
-    api_service.py            # service d'inference
-    api_simulation.py         # simulation d'appels
+    api/
+      main.py                 # factory FastAPI et lifecycle
+      routers/                # routes health/readiness/prediction
+      schemas.py              # contrats HTTP Pydantic
+      services.py             # adaptation HTTP vers application scoring
+      dependencies.py         # chargement cache du modele et validateurs
+      exception_handlers.py   # erreurs API structurees
 ```
 
 Les notebooks dans `notebooks/` importent ces classes et fonctions. Ils ne portent pas

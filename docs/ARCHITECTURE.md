@@ -9,7 +9,7 @@ projet : ils instancient et exécutent explicitement les composants exposés par
 ## Vue d’ensemble
 
 ```text
-dev/*.ipynb          scripts/*.py          FastAPI
+notebooks/*.ipynb    scripts/*.py          FastAPI
     │                    │                   │
     └────────────── interfaces / runners ───┘
                          │
@@ -56,10 +56,13 @@ src/credit_risk_lab/
     visualization/  graphiques Plotly
 
   interfaces/
-    api.py          routes FastAPI
-    api_models.py   schémas HTTP Pydantic
-    api_service.py  adaptation HTTP vers scoring applicatif
-    api_simulation.py
+    api/
+      main.py       factory FastAPI et lifecycle
+      routers/      routes health/readiness/prediction
+      schemas.py    contrats HTTP Pydantic
+      services.py   adaptation HTTP vers scoring applicatif
+      dependencies.py
+      exception_handlers.py
 
   config/
     settings.py     configuration typée
@@ -123,10 +126,9 @@ exemple, le feature engineering Pandas applique les mappings définis dans
 
 Les interfaces sont les points d’entrée :
 
-- notebooks dans `dev/` ;
+- notebooks dans `notebooks/` ;
 - scripts dans `scripts/` ;
-- API FastAPI dans `interfaces/api.py` ;
-- simulation API dans `interfaces/api_simulation.py`.
+- API FastAPI dans `interfaces/api/`.
 
 Elles doivent rester fines. Leur rôle est de recevoir une demande, instancier
 les composants nécessaires, appeler des méthodes publiques, puis afficher ou
@@ -172,8 +174,10 @@ une classe dans `src/credit_risk_lab`.
 02_data_quality.ipynb
 03_split_drift_feature_engineering.ipynb
 04_preprocessing_and_training.ipynb
-05_model_evaluation_and_persistence.ipynb
-06_inference_and_api_simulation.ipynb
+05_hyperparameter_tuning.ipynb
+06_model_evaluation_and_persistence.ipynb
+07_batch_and_realtime_inference.ipynb
+08_end_to_end_mlops_pipeline.ipynb
 ```
 
 Chaque notebook est reproductible seul à partir des données, chemins et bundles
