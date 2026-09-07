@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
 
 def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
@@ -20,7 +20,13 @@ def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
     categorical_pipe = Pipeline(
         [
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("one_hot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            (
+                "ordinal",
+                OrdinalEncoder(
+                    handle_unknown="use_encoded_value",
+                    unknown_value=-1,
+                ),
+            ),
         ]
     )
     return ColumnTransformer(

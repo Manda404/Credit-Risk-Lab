@@ -5,7 +5,15 @@ from .dataset_splitting import (
     three_way_stratified_split,
     three_way_temporal_split,
 )
-from .scoring import ModelScorer, RawLoanScorer, ScoringResult
+from .scoring import (
+    BatchInferenceResult,
+    BatchInferenceRunner,
+    ModelScorer,
+    RawLoanScorer,
+    RealtimeInferenceEvent,
+    RealtimeInferenceSimulator,
+    ScoringResult,
+)
 from .deployment_split import DeploymentSplitResult, create_deployment_split
 
 __all__ = [
@@ -18,6 +26,10 @@ __all__ = [
     "ModelScorer",
     "RawLoanScorer",
     "ScoringResult",
+    "BatchInferenceResult",
+    "BatchInferenceRunner",
+    "RealtimeInferenceEvent",
+    "RealtimeInferenceSimulator",
     "DeploymentSplitResult",
     "create_deployment_split",
 ]

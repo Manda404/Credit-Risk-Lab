@@ -1,93 +1,353 @@
 # Credit Risk Lab
 
-A reproducible educational credit-risk pipeline comparing XGBoost, CatBoost, and LightGBM through a shared wrapper interface.
+Credit Risk Lab est un projet end-to-end de Machine Learning et MLOps pour le
+scoring du risque credit. L'objectif est de construire un pipeline
+industrialisable capable d'identifier les demandes de pret a risque eleve, tout
+en conservant une separation stricte entre exploration, preprocessing,
+entrainement, tuning, evaluation finale et simulation d'inference.
 
-## What the project does
+Le projet est structure autour d'une clean architecture : les notebooks servent
+uniquement a orchestrer et executer les etapes, tandis que la logique reusable
+vit dans `src/credit_risk_lab`.
 
-The repository implements a complete local experimental workflow:
+> Dataset synthetique et usage pedagogique : les resultats ne doivent pas etre
+> utilises pour prendre de vraies decisions de credit sans validation metier,
+> juridique, model risk management et gouvernance complete.
 
-1. load and validate the raw loan dataset;
-2. flag and remove implausible age/experience records under an explicit rule;
-3. inspect deterministic domain features;
-4. create a clearly labelled experimental random split, or a chronological borrower-safe split when dates and identifiers exist;
-5. fit imputation, scaling, and one-hot encoding on training data only;
-6. train XGBoost, CatBoost, and LightGBM with early stopping;
-7. plot training and validation log loss together;
-8. select the candidate and threshold on validation data only;
-9. evaluate only the locked winner on untouched test data;
-10. save experiment reports and a reloadable model bundle.
+## Probleme Metier
 
-The dataset is synthetic. Results are educational and must not be used for real lending decisions.
+Dans un contexte credit risk, chaque demande de pret doit etre classee selon son
+niveau de risque :
 
-## Project layout
+- `loan_status = 0` : profil considere comme faible risque.
+- `loan_status = 1` : profil considere comme haut risque.
 
+La difficulte ne se limite pas a obtenir un bon score global. Un modele de
+credit doit aussi permettre de comprendre :
 
-    src/credit_risk_lab/
-      application/          # end-to-end use cases
-      config/               # CRL-prefixed typed settings
-      infrastructure/
-        analytics/          # EDA and drift
-        data_sources/       # CSV adapter
-        evaluation/         # credit-risk metrics and lift
-        feature_engineering/# deterministic domain features
-        modeling/           # preprocessing, wrappers, persistence
-        visualization/      # reusable Plotly figures
-    dev/                    # six ordered, progressive execution notebooks
-    tests/                  # unit tests
-    docs/                   # architecture audit
-    reports/                # generated experiment tables
+- quelles variables influencent la decision ;
+- comment eviter le data leakage ;
+- comment garder un jeu de test strictement untouched ;
+- comment choisir un seuil de decision adapte au risque metier ;
+- combien de dossiers haut risque sont captures ou rates ;
+- quel est le niveau de calibration des probabilites ;
+- si certaines variables sensibles sont exclues de l'entrainement ;
+- si le pipeline peut etre rejoue de maniere reproductible.
 
-## Notebooks
+## Ce Que Le Projet Demontre
 
-- `dev/01_data_understanding.ipynb`: explicit loading, column summary, target distribution, and EDA.
-- `dev/02_data_quality.ipynb`: schema checks, quality report, cleaning, and clean-data inspection.
-- `dev/03_split_drift_feature_engineering.ipynb`: external holdout split, persistence, drift, and deterministic features.
-- `dev/04_preprocessing_and_training.ipynb`: development split, train-only preprocessing, candidate training, and selection.
-- `dev/05_model_evaluation_and_persistence.ipynb`: metrics, calibration, fairness, metadata, and explicit bundle persistence.
-- `dev/06_inference_and_api_simulation.ipynb`: bundle loading, raw scoring, Pydantic validation, API prediction, and simulation.
+Ce repository met en avant une demarche complete de ML Engineering :
 
-Notebooks contain explanations and orchestration only. Reusable logic belongs in `src/`.
+- Architecture clean avec couches `domain`, `application`, `infrastructure` et
+  `interfaces`.
+- Configuration centralisee dans `configs/settings.yaml` et
+  `configs/models.yaml`.
+- Separation des environnements `development`, `staging` et `production`.
+- Split initial avec `train.csv` et `test.csv` dans `data/raw`.
+- Jeu de test final reserve uniquement a l'evaluation finale.
+- Analyse exploratoire et data quality sans polluer les notebooks avec de la
+  logique metier.
+- Detection de data leakage avant preprocessing.
+- Feature engineering deterministe encapsule dans des classes Python.
+- Preprocessing fit uniquement sur le train, puis applique a la validation et au
+  test.
+- Sauvegarde des datasets transformes dans `data/processed`.
+- Selection de baseline models sans tuning agressif.
+- Optimisation CatBoost avec Optuna sur `roc_auc`.
+- Feature importance du modele CatBoost selectionne et optimise.
+- Evaluation finale sur test untouched avec seuil de decision versionne.
+- Analyses avancees : ROC-AUC, PR-AUC, KS, Gini, Brier score, ECE, lift/gain,
+  deciles, intervalle de confiance bootstrap, calibration, fairness diagnostics.
+- Bundle modele + preprocessor pour inference reproductible.
+- API FastAPI et simulation de prediction.
+- Tests unitaires et formatage pour securiser les changements.
+
+## Architecture
+
+```text
+src/credit_risk_lab/
+  domain/
+    entities/                 # objets metier et contrats de resultat
+    ports/                    # interfaces attendues par le domaine
+    services/                 # regles metier pures
+
+  application/
+    workflows/                # cas d'usage orchestration end-to-end
+    scoring.py                # scoring applicatif
+    dataset_splitting.py      # logique de split
+
+  infrastructure/
+    analytics/                # inspection, leakage, drift, reports
+    data_sources/             # lecture CSV et repositories
+    evaluation/               # metriques, seuils, lift, fairness
+    feature_engineering/      # transformations metier pandas
+    modeling/                 # preprocessing, model wrappers, persistence
+    visualization/            # figures Plotly reutilisables
+
+  interfaces/
+    api.py                    # API FastAPI
+    api_models.py             # schemas Pydantic
+    api_service.py            # service d'inference
+    api_simulation.py         # simulation d'appels
+```
+
+Les notebooks dans `dev/` importent ces classes et fonctions. Ils ne portent pas
+la logique principale du projet.
+
+## Pipeline MLOps
+
+### 1. Data Understanding
+
+Notebook : `dev/01_data_understanding.ipynb`
+
+Objectif :
+
+- charger le dataset brut ;
+- comprendre les colonnes disponibles ;
+- visualiser la distribution de la target ;
+- produire un resume clair des colonnes ;
+- eviter de dupliquer les analyses plus detaillees du notebook 02.
+
+### 2. Data Quality
+
+Notebook : `dev/02_data_quality.ipynb`
+
+Objectif :
+
+- appliquer les controles qualite ;
+- analyser les valeurs manquantes, cardinalites, types et outliers ;
+- produire des visualisations numeriques et categorielles ;
+- nettoyer les valeurs impossibles selon des regles explicites ;
+- preparer un dataset propre avant split/modeling.
+
+### 3. Split, Drift Et Feature Engineering
+
+Notebook : `dev/03_split_drift_feature_engineering.ipynb`
+
+Objectif :
+
+- creer un split initial `train` / `test` ;
+- sauvegarder le test brut dans `data/raw/test.csv` ;
+- ne jamais utiliser ce test pendant exploration, preprocessing, selection ou
+  tuning ;
+- analyser le drift entre partitions ;
+- verifier les risques de data leakage ;
+- creer les features metier ;
+- afficher l'evolution des colonnes creees ;
+- fitter le preprocessor sur le train seulement ;
+- transformer train et validation avec le meme preprocessor ;
+- sauvegarder les datasets transformes dans `data/processed`.
+
+### 4. Baseline Model Selection
+
+Notebook : `dev/04_preprocessing_and_training.ipynb`
+
+Objectif :
+
+- charger les datasets processed ;
+- entrainer plusieurs modeles sans recherche d'hyperparametres lourde ;
+- comparer les baselines sur validation ;
+- ajouter `LogisticRegression` comme baseline lineaire interpretable ;
+- selectionner le meilleur modele selon `settings.selection_metric` ;
+- produire la feature importance lorsque le modele selectionne est CatBoost.
+
+### 5. Hyperparameter Tuning
+
+Notebook : `dev/05_hyperparameter_tuning.ipynb`
+
+Objectif :
+
+- reconstruire le ranking baseline ;
+- optimiser uniquement le meilleur modele retenu : CatBoost ;
+- utiliser Optuna avec `roc_auc` comme metrique d'optimisation ;
+- visualiser la progression des trials ;
+- analyser l'importance des hyperparametres ;
+- comparer baseline CatBoost vs CatBoost optimise ;
+- sauvegarder le bundle optimise.
+
+### 6. Evaluation Finale
+
+Notebook : `dev/06_model_evaluation_and_persistence.ipynb`
+
+Objectif :
+
+- charger le modele optimise ;
+- charger uniquement maintenant le test untouched ;
+- appliquer le meme feature engineering et le meme preprocessor ;
+- calculer les metriques finales ;
+- analyser la matrice de confusion avec la ROC curve ;
+- etudier le trade-off precision / recall selon plusieurs seuils ;
+- mesurer lift, gain, accumulation, KS, Gini, calibration, Brier, ECE ;
+- produire des intervalles de confiance bootstrap ;
+- executer un diagnostic fairness hors entrainement.
+
+### 7. Batch Et Realtime Inference
+
+Notebook : `dev/07_batch_and_realtime_inference.ipynb`
+
+Objectif :
+
+- charger le bundle final ;
+- scorer les donnees de test en batch ;
+- sauvegarder un fichier `submission.csv` ;
+- simuler des requetes utilisateur une par une sans API ;
+- logger chaque prediction temps reel ;
+- verifier que le seuil de decision versionne est bien applique.
+
+## Strategie Modele
+
+La selection suit une logique realiste :
+
+1. Entrainer des baselines simples sans tuning lourd.
+2. Comparer les performances sur validation.
+3. Identifier le meilleur candidat.
+4. Optimiser uniquement le meilleur modele avec Optuna.
+5. Evaluer une seule fois sur le test untouched.
+
+Les candidats sont declares dans `configs/models.yaml` :
+
+- `LogisticRegression`
+- `RandomForest`
+- `XGBoost`
+- `CatBoost`
+- `LightGBM` desactive pour le moment
+
+CatBoost est le modele cible du projet actuel, car il gere bien les problemes
+tabulaires et permet de garder un preprocessing compact sans explosion
+artificielle du nombre de colonnes.
+
+## Reproductibilite
+
+Le projet contient plusieurs garde-fous MLOps :
+
+| Sujet | Implementation |
+| --- | --- |
+| Version Python | `python = ">=3.13,<3.15"` dans `pyproject.toml` |
+| Dependances | `poetry.lock` versionne |
+| Configuration | `configs/settings.yaml` et `configs/models.yaml` |
+| Environnements | `configs/environments/development.yaml`, `staging.yaml`, `production.yaml` |
+| Randomness | `random_state` centralise |
+| Donnees | separation `data/raw` et `data/processed` |
+| Test untouched | test charge uniquement en evaluation finale |
+| Preprocessing | fit sur train, transform sur validation/test |
+| Sensibles | `person_gender` et `is_female` exclus de l'entrainement |
+| Model artifact | bundle modele + preprocessor + metadata |
+| Validation | tests unitaires avec `pytest` |
+
+## Artefacts Produits
+
+Les artefacts generes localement sont separes du code :
+
+```text
+data/raw/
+  loan_data.csv              # dataset source
+  train.csv                  # partition brute de developpement
+  test.csv                   # holdout final untouched
+
+data/processed/
+  train.csv                  # train transforme
+  validation.csv             # validation transformee
+  credit_risk_preprocessor.joblib
+
+models/
+  best_boosting_model.joblib # bundle modele final
+
+reports/
+  boosting_model_metrics.csv
+  deployment_split_drift.csv
+  deployment_split_drift.html
+```
+
+Les dossiers de donnees et de rapports peuvent etre ignores par Git selon la
+politique du projet afin d'eviter de versionner des artefacts lourds ou generes.
 
 ## Installation
 
+```bash
+poetry install
+```
 
-    poetry install
+Pour installer le kernel Jupyter dans l'environnement Poetry :
 
-Environment variables use the `CRL_` prefix. Select the runtime environment
-with `CRL_ENVIRONMENT=development`, `CRL_ENVIRONMENT=staging`, or
-`CRL_ENVIRONMENT=production`.
+```bash
+poetry run python -m ipykernel install --user --name credit-risk-lab
+```
 
-Environment-specific overrides live in `configs/environments/`. See
-[docs/MLOPS_REPRODUCIBILITY.md](docs/MLOPS_REPRODUCIBILITY.md).
+Selectionner un environnement :
 
-## Run tests
+```bash
+export CRL_ENVIRONMENT=development
+export CRL_ENVIRONMENT=staging
+export CRL_ENVIRONMENT=production
+```
 
+## Commandes Utiles
 
-    poetry run pytest -q
+Regenerer les notebooks canoniques :
 
-## Execute all notebooks
+```bash
+poetry run python scripts/build_notebooks.py
+```
 
+Creer le split de deploiement :
 
-    poetry run python scripts/build_notebooks.py
-    poetry run python -m nbconvert --to notebook --execute --inplace "dev/*.ipynb" --ExecutePreprocessor.timeout=600
+```bash
+poetry run python scripts/create_deployment_split.py
+```
 
-## Current experimental result
+Executer les tests :
 
-On the deterministic random test split produced on 11 July 2026, LightGBM ranked first by ROC-AUC (0.9762), followed by XGBoost (0.9731) and CatBoost (0.9718). These values are not production claims: temporal validation, calibration review, fairness testing, explainability, governance, and independent model validation remain mandatory for real credit use.
+```bash
+poetry run pytest
+```
 
-`person_gender` and its derived `is_female` are excluded from training features by default (see `Settings.sensitive_columns`) and are only retained per-row in the test split for a separate fairness audit; they must never be used to train the model directly.
+Verifier le formatage :
 
-See [docs/ETAT_DE_L_ART.md](docs/ETAT_DE_L_ART.md) for the detailed audit and roadmap.
+```bash
+poetry run black --check src scripts tests
+```
 
-## Inference API and production simulation
+Lancer l'API localement :
 
-The repository includes a validated FastAPI endpoint, a raw 90/10 external
-holdout, a timed traffic simulator, and Docker packaging. See
-[docs/API_DEPLOYMENT.md](docs/API_DEPLOYMENT.md) for local and container commands.
+```bash
+poetry run uvicorn credit_risk_lab.interfaces.api:app --reload
+```
 
-The operational risk threshold is versioned as `decision_threshold` in
-`configs/settings.yaml` (currently `0.25`) and is returned by every prediction
-response. It can be overridden at deployment with `CRL_DECISION_THRESHOLD`.
+## Evaluation Metier
 
-Candidate model activation and hyperparameters are versioned separately in
-`configs/models.yaml`. See [docs/MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md).
+Le projet ne s'arrete pas a `accuracy`, car cette metrique est souvent
+insuffisante en credit risk. Les analyses finales permettent de repondre a des
+questions plus utiles :
+
+- Combien de profils haut risque sont captures ?
+- Combien de profils haut risque sont rates ?
+- Combien de fausses alertes sont generees ?
+- Quel seuil maximise le compromis metier ?
+- Le modele classe-t-il bien les dossiers du plus risque au moins risque ?
+- Le top decile concentre-t-il une part importante des defauts ?
+- Les probabilites sont-elles bien calibrees ?
+- Les performances sont-elles stables selon les intervalles de confiance ?
+- Les variables sensibles exclues presentent-elles quand meme des ecarts
+  d'impact en evaluation ?
+
+Cette logique rend le projet plus proche d'un vrai workflow de model risk et de
+decision science.
+
+## Roadmap Production
+
+Les prochaines etapes naturelles pour aller vers une version plus production :
+
+- ajouter un tracking MLflow complet des runs, params, metrics et artefacts ;
+- brancher un model registry avec promotion `staging` vers `production` ;
+- ajouter une CI/CD avec tests, lint, build Docker et validation notebooks ;
+- definir des data contracts automatises ;
+- automatiser le monitoring drift/performance/calibration apres deploiement ;
+- formaliser une validation fairness et gouvernance metier plus stricte ;
+- ajouter des tests d'integration API et batch scoring.
+
+## Positionnement
+
+Ce projet montre une demarche complete de Senior ML Engineer / MLOps Engineer :
+partir d'un probleme credit risk, structurer le code en architecture propre,
+proteger la reproductibilite, entrainer et optimiser un modele, evaluer avec des
+metriques metier avancees, puis preparer l'inference et le deploiement.

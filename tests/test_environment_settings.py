@@ -14,6 +14,7 @@ def test_development_environment_keeps_local_lab_paths(monkeypatch):
     assert settings.raw_test_path.parent == settings.raw_dir
     assert settings.raw_train_path != settings.raw_test_path
     assert settings.validation_path.parent == settings.processed_dir
+    assert settings.preprocessing_artifact_path.parent == settings.processed_dir
     assert settings.processed_dir.name == "processed"
     assert settings.models_dir.name == "models"
     assert settings.reports_dir.name == "reports"

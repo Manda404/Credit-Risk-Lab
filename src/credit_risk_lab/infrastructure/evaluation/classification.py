@@ -153,3 +153,73 @@ def decile_table(y_true, probabilities: np.ndarray, bins: int = 10) -> pd.DataFr
         grouped["positives"].cumsum() / grouped["positives"].sum()
     )
     return grouped.reset_index()
+
+
+def lift_gain_table(y_true, probabilities: np.ndarray, bins: int = 10) -> pd.DataFrame:
+    """Return decile-level lift, gain, and accumulation metrics."""
+    table = decile_table(y_true, probabilities, bins=bins).copy()
+    total_rows = table["rows"].sum()
+    total_positives = table["positives"].sum()
+    table["cumulative_rows"] = table["rows"].cumsum()
+    table["sample_fraction"] = table["cumulative_rows"] / total_rows
+    table["cumulative_positives"] = table["positives"].cumsum()
+    table["cumulative_capture_rate"] = table["cumulative_positives"] / total_positives
+    table["cumulative_lift"] = (
+        table["cumulative_capture_rate"] / table["sample_fraction"]
+    )
+    return table
+
+
+def bootstrap_metric_intervals(
+    y_true,
+    probabilities: np.ndarray,
+    threshold: float,
+    *,
+    n_bootstrap: int = 300,
+    confidence_level: float = 0.95,
+    random_state: int = 42,
+) -> pd.DataFrame:
+    """Estimate confidence intervals for key classification metrics."""
+    if n_bootstrap < 10:
+        raise ValueError("n_bootstrap must be at least 10")
+    if not 0 < confidence_level < 1:
+        raise ValueError("confidence_level must be between 0 and 1")
+    target = np.asarray(y_true, dtype=int)
+    probabilities = np.asarray(probabilities, dtype=float)
+    rng = np.random.default_rng(random_state)
+    metrics_by_name: dict[str, list[float]] = {
+        "roc_auc": [],
+        "pr_auc": [],
+        "ks": [],
+        "f1": [],
+        "mcc": [],
+        "balanced_accuracy": [],
+    }
+    for _ in range(n_bootstrap):
+        index = rng.integers(0, len(target), size=len(target))
+        sampled_target = target[index]
+        if len(np.unique(sampled_target)) < 2:
+            continue
+        sampled_probabilities = probabilities[index]
+        metrics = classification_metrics(
+            sampled_target, sampled_probabilities, threshold
+        )
+        for metric in metrics_by_name:
+            metrics_by_name[metric].append(metrics[metric])
+    alpha = 1 - confidence_level
+    rows = []
+    point_estimates = classification_metrics(target, probabilities, threshold)
+    for metric, values in metrics_by_name.items():
+        if not values:
+            continue
+        rows.append(
+            {
+                "metric": metric,
+                "estimate": point_estimates[metric],
+                "lower": float(np.quantile(values, alpha / 2)),
+                "upper": float(np.quantile(values, 1 - alpha / 2)),
+                "confidence_level": confidence_level,
+                "bootstrap_samples": len(values),
+            }
+        )
+    return pd.DataFrame(rows)

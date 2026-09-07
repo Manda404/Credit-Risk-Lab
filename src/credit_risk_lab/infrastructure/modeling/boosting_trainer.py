@@ -6,6 +6,7 @@ import pandas as pd
 
 from credit_risk_lab.config.settings import settings
 from credit_risk_lab.infrastructure.evaluation import CreditRiskModelEvaluator
+from credit_risk_lab.shared.logging import setup_logger
 
 from .model_factory import build_configured_models
 
@@ -101,6 +102,7 @@ class BestModelSelector:
 
     def __init__(self, metric: str = settings.selection_metric):
         self.metric = metric
+        self.logger = setup_logger(name="BestModelSelector")
 
     def select(self, results: list[CandidateTrainingResult]) -> CandidateTrainingResult:
         """Return the candidate with the highest configured metric."""
@@ -113,4 +115,11 @@ class BestModelSelector:
             raise ValueError(
                 f"Metric {self.metric!r} is missing for candidates: {missing}"
             )
-        return max(results, key=lambda result: result.metrics[self.metric])
+        selected = max(results, key=lambda result: result.metrics[self.metric])
+        self.logger.info(
+            "Selected model="
+            f"{selected.model_name} metric={self.metric} "
+            f"value={selected.metrics[self.metric]:.4f} "
+            f"threshold={selected.threshold:.4f}"
+        )
+        return selected

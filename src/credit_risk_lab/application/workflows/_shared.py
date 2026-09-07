@@ -22,8 +22,15 @@ def load_raw_dataset() -> pd.DataFrame:
 
 
 def load_train_dataset() -> pd.DataFrame:
-    """Load the persisted raw training partition."""
+    """Load the persisted processed training partition."""
     return CSVDatasetRepository(CSVDataSourceConfig(path=settings.train_path)).load()
+
+
+def load_validation_dataset() -> pd.DataFrame:
+    """Load the persisted processed validation partition."""
+    return CSVDatasetRepository(
+        CSVDataSourceConfig(path=settings.validation_path)
+    ).load()
 
 
 def load_raw_train_dataset() -> pd.DataFrame:

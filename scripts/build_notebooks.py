@@ -283,18 +283,7 @@ display(overlap_report)
 target_report
 """
         ),
-        markdown("## 4. Persist development artifacts"),
-        code(
-            """
-from credit_risk_lab.infrastructure.data_sources import CSVDatasetRepository
-
-train_path = CSVDatasetRepository.save(model_train_df, settings.train_path)
-validation_path = CSVDatasetRepository.save(validation_df, settings.validation_path)
-
-{"train_path": str(train_path), "validation_path": str(validation_path)}
-"""
-        ),
-        markdown("## 5. Train vs validation drift analysis"),
+        markdown("## 4. Train vs validation drift analysis"),
         code(
             """
 from credit_risk_lab.infrastructure.analytics import DriftAnalyzer
@@ -311,7 +300,7 @@ drift_report = drift_analyzer.report_frame(
 drift_report.head(10)
 """
         ),
-        markdown("## 6. Drift visualisation"),
+        markdown("## 5. Drift visualisation"),
         code(
             """
 from credit_risk_lab.infrastructure.visualization import plot_drift_summary
@@ -319,19 +308,90 @@ from credit_risk_lab.infrastructure.visualization import plot_drift_summary
 plot_drift_summary(drift_report).show()
 """
         ),
-        markdown("## 7. Business feature engineering on train only"),
+        markdown("## 6. Business feature engineering on train and validation"),
         code(
             """
+from credit_risk_lab.infrastructure.analytics import FeatureEngineeringReport
 from credit_risk_lab.infrastructure.feature_engineering import LoanFeatureEngineer
 
 feature_engineer = LoanFeatureEngineer()
 featured_train_df = feature_engineer.transform(model_train_df)
-created_features = [
-    column for column in featured_train_df.columns if column not in model_train_df.columns
-]
+featured_validation_df = feature_engineer.transform(validation_df)
+feature_report = FeatureEngineeringReport(model_train_df, featured_train_df)
+created_features = feature_report.created_columns()
 
-display(featured_train_df.head())
-pd.DataFrame({"created_feature": created_features})
+print(f"Columns before feature engineering: {model_train_df.shape[1]}")
+print(f"Columns after feature engineering: {featured_train_df.shape[1]}")
+print(f"New columns created: {len(created_features)}")
+print(f"Columns removed: {len(feature_report.removed_columns())}")
+print(f"Retained columns modified: {len(feature_report.changed_columns())}")
+print(f"Validation received the same column schema: {featured_train_df.columns.equals(featured_validation_df.columns)}")
+
+display(feature_report.summary())
+display(feature_report.created_columns_frame())
+featured_train_df.head()
+"""
+        ),
+        markdown("## 7. Fit preprocessing on train and transform validation"),
+        code(
+            """
+from credit_risk_lab.infrastructure.modeling import CreditRiskPreprocessor
+
+sensitive_columns = [
+    column for column in settings.sensitive_columns if column in featured_train_df
+]
+target_column = settings.target_column
+
+x_train = featured_train_df.drop(columns=[target_column, *sensitive_columns])
+y_train = featured_train_df[target_column].reset_index(drop=True)
+x_validation = featured_validation_df.drop(columns=[target_column, *sensitive_columns])
+y_validation = featured_validation_df[target_column].reset_index(drop=True)
+
+preprocessor = CreditRiskPreprocessor()
+processed_train_features = preprocessor.fit_transform_frame(x_train)
+processed_validation_features = preprocessor.transform_frame(x_validation)
+
+processed_train_df = processed_train_features.assign(**{target_column: y_train.to_numpy()})
+processed_validation_df = processed_validation_features.assign(
+    **{target_column: y_validation.to_numpy()}
+)
+
+print(f"Columns before preprocessing: {x_train.shape[1]}")
+print(f"Columns after preprocessing: {processed_train_features.shape[1]}")
+print(f"Sensitive columns excluded: {sensitive_columns}")
+print(f"Target excluded from features: {target_column}")
+print(f"Preprocessor output features: {len(preprocessor.feature_names_)}")
+print(f"Validation output columns match train: {processed_validation_features.columns.equals(processed_train_features.columns)}")
+
+display(
+    pd.DataFrame(
+        [
+            {"step": "after_feature_engineering", "train_columns": x_train.shape[1], "validation_columns": x_validation.shape[1]},
+            {"step": "after_preprocessing", "train_columns": processed_train_features.shape[1], "validation_columns": processed_validation_features.shape[1]},
+        ]
+    )
+)
+display(pd.DataFrame({"model_feature": preprocessor.feature_names_}))
+"""
+        ),
+        markdown("## 8. Persist transformed development artifacts"),
+        code(
+            """
+from credit_risk_lab.infrastructure.data_sources import CSVDatasetRepository
+
+train_path = CSVDatasetRepository.save(processed_train_df, settings.train_path)
+validation_path = CSVDatasetRepository.save(
+    processed_validation_df,
+    settings.validation_path,
+)
+preprocessor_path = preprocessor.save(settings.preprocessing_artifact_path)
+
+{
+    "processed_train_path": str(train_path),
+    "processed_validation_path": str(validation_path),
+    "preprocessor_path": str(preprocessor_path),
+    "reserved_final_test_path": str(settings.raw_test_path),
+}
 """
         ),
     ],
@@ -340,79 +400,78 @@ pd.DataFrame({"created_feature": created_features})
 
 training = notebook(
     "04 - Preprocessing and Training",
-    "préparer les matrices sans fuite de données, entraîner les candidats et sélectionner le meilleur modèle.",
+    "charger les artefacts transformés par le notebook 03, vérifier le contrat de preprocessing, entraîner les candidats et sélectionner le meilleur modèle.",
     [
         setup,
-        markdown("## 1. Load training partition"),
+        markdown("## 1. Load processed train and validation partitions"),
         code(
             """
-from credit_risk_lab.infrastructure.data_sources import CsvLoanDataLoader
-
-train_loader = CsvLoanDataLoader(path=settings.train_path)
-train_raw = train_loader.load()
-train_raw.head()
-"""
-        ),
-        markdown("## 2. Feature engineering"),
-        code(
-            """
-from credit_risk_lab.infrastructure.feature_engineering import LoanFeatureEngineer
-
-feature_engineer = LoanFeatureEngineer()
-train_features = feature_engineer.transform(train_raw)
-train_features.shape
-"""
-        ),
-        markdown("## 3. Development split"),
-        code(
-            """
-from credit_risk_lab.application import three_way_stratified_split
-
-split = three_way_stratified_split(train_features)
-
-pd.DataFrame(
-    [
-        {"split": "train", "rows": len(split.y_train), "positive_rate": split.y_train.mean()},
-        {"split": "validation", "rows": len(split.y_validation), "positive_rate": split.y_validation.mean()},
-        {"split": "test", "rows": len(split.y_test), "positive_rate": split.y_test.mean()},
-    ]
-)
-"""
-        ),
-        markdown("## 4. Sensitive columns excluded from training features"),
-        code(
-            """
-sensitive_columns = [
-    column for column in settings.sensitive_columns if column in split.x_train
-]
-
-x_train = split.x_train.drop(columns=sensitive_columns)
-x_validation = split.x_validation.drop(columns=sensitive_columns)
-x_test = split.x_test.drop(columns=sensitive_columns)
-sensitive_test = split.x_test[sensitive_columns].copy()
-
-{"excluded": sensitive_columns, "training_columns": x_train.shape[1]}
-"""
-        ),
-        markdown("## 5. Fit preprocessing on train only"),
-        code(
-            """
+from credit_risk_lab.infrastructure.data_sources import CSVDataSourceConfig, CSVDatasetRepository
 from credit_risk_lab.infrastructure.modeling import CreditRiskPreprocessor
 
-preprocessor = CreditRiskPreprocessor()
-x_train_t = preprocessor.fit_transform(x_train)
-x_validation_t = preprocessor.transform(x_validation)
-x_test_t = preprocessor.transform(x_test)
+processed_train_df = CSVDatasetRepository(
+    CSVDataSourceConfig(path=settings.train_path)
+).load()
+processed_validation_df = CSVDatasetRepository(
+    CSVDataSourceConfig(path=settings.validation_path)
+).load()
+preprocessor = CreditRiskPreprocessor.load(settings.preprocessing_artifact_path)
+
+print(f"Processed train path: {settings.train_path}")
+print(f"Processed validation path: {settings.validation_path}")
+print(f"Preprocessor artifact path: {settings.preprocessing_artifact_path}")
+print(f"Processed train shape: {processed_train_df.shape}")
+print(f"Processed validation shape: {processed_validation_df.shape}")
+print(f"Preprocessor output features: {len(preprocessor.feature_names_)}")
 
 {
-    "train_matrix": x_train_t.shape,
-    "validation_matrix": x_validation_t.shape,
-    "test_matrix": x_test_t.shape,
-    "first_output_features": preprocessor.feature_names_[:20],
+    "processed_train": processed_train_df.shape,
+    "processed_validation": processed_validation_df.shape,
+    "preprocessor_features": len(preprocessor.feature_names_),
 }
 """
         ),
-        markdown("## 6. Inspect configured model candidates"),
+        markdown("## 2. Build train and validation matrices"),
+        code(
+            """
+target_column = settings.target_column
+
+x_train = processed_train_df.drop(columns=[target_column])
+y_train = processed_train_df[target_column]
+x_validation = processed_validation_df.drop(columns=[target_column])
+y_validation = processed_validation_df[target_column]
+
+train_schema_matches_preprocessor = x_train.columns.tolist() == preprocessor.feature_names_
+validation_schema_matches_train = x_validation.columns.tolist() == x_train.columns.tolist()
+
+if not train_schema_matches_preprocessor:
+    raise ValueError("Processed train columns do not match the saved preprocessor features")
+if not validation_schema_matches_train:
+    raise ValueError("Processed validation columns do not match processed train columns")
+
+print(f"Target column excluded from model features: {target_column}")
+print(f"Train feature columns: {x_train.shape[1]}")
+print(f"Validation feature columns: {x_validation.shape[1]}")
+print(f"Train schema matches saved preprocessor: {train_schema_matches_preprocessor}")
+print(f"Validation schema matches train: {validation_schema_matches_train}")
+print(f"Final test remains untouched at: {settings.raw_test_path}")
+
+split_summary = pd.DataFrame(
+    [
+        {"split": "train", "rows": len(y_train), "positive_rate": y_train.mean()},
+        {
+            "split": "validation",
+            "rows": len(y_validation),
+            "positive_rate": y_validation.mean(),
+        },
+    ]
+)
+
+display(split_summary)
+pd.DataFrame({"model_feature": x_train.columns})
+"""
+        ),
+        markdown("## 3. Inspect configured model candidates"),
         code(
             """
 from credit_risk_lab.infrastructure.modeling import build_configured_models, load_models_config
@@ -435,24 +494,24 @@ pd.DataFrame(
 )
 """
         ),
-        markdown("## 7. Train candidates"),
+        markdown("## 4. Train candidates"),
         code(
             """
 from credit_risk_lab.infrastructure.modeling import BoostingModelTrainer
 
 trainer = BoostingModelTrainer(random_state=settings.random_state)
 training_results = trainer.fit(
-    x_train_t,
-    split.y_train,
-    x_validation_t,
-    split.y_validation,
+    x_train,
+    y_train,
+    x_validation,
+    y_validation,
 )
 
 validation_metrics = trainer.results_frame(training_results)
 validation_metrics.round(4)
 """
         ),
-        markdown("## 8. Select best model"),
+        markdown("## 5. Select best model"),
         code(
             """
 from credit_risk_lab.infrastructure.modeling import BestModelSelector
@@ -467,7 +526,7 @@ best_result = selector.select(training_results)
 }
 """
         ),
-        markdown("## 9. Training curves"),
+        markdown("## 6. Training curves"),
         code(
             """
 from credit_risk_lab.infrastructure.visualization import plot_learning_curves, plot_model_comparison
@@ -480,149 +539,474 @@ plot_model_comparison(validation_metrics).show()
 plot_learning_curves(histories).show()
 """
         ),
+        markdown("## 7. Selected model feature importance"),
+        code(
+            """
+from credit_risk_lab.infrastructure.modeling import CatBoostFeatureImportanceAnalyzer
+from credit_risk_lab.infrastructure.visualization import plot_feature_importance
+
+top_n_features = 20
+
+if best_result.model_name == "CatBoost":
+    baseline_importance = CatBoostFeatureImportanceAnalyzer(
+        best_result.model,
+        feature_names=x_train.columns.tolist(),
+    ).importance_frame(top_n=top_n_features)
+    display(baseline_importance.round(4))
+    plot_feature_importance(
+        baseline_importance,
+        title=f"Top {top_n_features} CatBoost baseline feature importances",
+    ).show()
+else:
+    print(f"Selected baseline model is {best_result.model_name}; CatBoost importance skipped.")
+"""
+        ),
     ],
 )
 
 
-evaluation = notebook(
-    "05 - Model Evaluation and Persistence",
-    "évaluer le modèle sélectionné, produire calibration/fairness, puis sauvegarder explicitement le bundle.",
+tuning = notebook(
+    "05 - Hyperparameter Tuning",
+    "optimiser CatBoost avec Optuna sur train/validation, sans toucher au test final.",
     [
         setup,
-        markdown("## 1. Load training partition"),
+        markdown("## 1. Load processed development partitions"),
         code(
             """
-from credit_risk_lab.infrastructure.data_sources import CsvLoanDataLoader
+from credit_risk_lab.infrastructure.data_sources import CSVDataSourceConfig, CSVDatasetRepository
+from credit_risk_lab.infrastructure.modeling import CreditRiskPreprocessor
 
-train_raw = CsvLoanDataLoader(path=settings.train_path).load()
-train_raw.shape
+processed_train_df = CSVDatasetRepository(
+    CSVDataSourceConfig(path=settings.train_path)
+).load()
+processed_validation_df = CSVDatasetRepository(
+    CSVDataSourceConfig(path=settings.validation_path)
+).load()
+preprocessor = CreditRiskPreprocessor.load(settings.preprocessing_artifact_path)
+
+{
+    "processed_train": processed_train_df.shape,
+    "processed_validation": processed_validation_df.shape,
+    "preprocessor_features": len(preprocessor.feature_names_),
+    "reserved_final_test_path": str(settings.raw_test_path),
+}
 """
         ),
-        markdown("## 2. Rebuild features and development split"),
+        markdown("## 2. Build train and validation matrices"),
         code(
             """
-from credit_risk_lab.application import three_way_stratified_split
-from credit_risk_lab.infrastructure.feature_engineering import LoanFeatureEngineer
+target_column = settings.target_column
 
-feature_engineer = LoanFeatureEngineer()
-train_features = feature_engineer.transform(train_raw)
-split = three_way_stratified_split(train_features)
+x_train = processed_train_df.drop(columns=[target_column])
+y_train = processed_train_df[target_column]
+x_validation = processed_validation_df.drop(columns=[target_column])
+y_validation = processed_validation_df[target_column]
 
-sensitive_columns = [
-    column for column in settings.sensitive_columns if column in split.x_train
-]
-x_train = split.x_train.drop(columns=sensitive_columns)
-x_validation = split.x_validation.drop(columns=sensitive_columns)
-x_test = split.x_test.drop(columns=sensitive_columns)
-sensitive_test = split.x_test[sensitive_columns].copy()
+pd.DataFrame(
+    [
+        {"split": "train", "rows": len(y_train), "positive_rate": y_train.mean()},
+        {
+            "split": "validation",
+            "rows": len(y_validation),
+            "positive_rate": y_validation.mean(),
+        },
+    ]
+)
 """
         ),
-        markdown("## 3. Preprocess and train candidates"),
+        markdown("## 3. Rebuild baseline ranking"),
         code(
             """
 from credit_risk_lab.infrastructure.modeling import (
     BestModelSelector,
     BoostingModelTrainer,
-    CreditRiskPreprocessor,
 )
-
-preprocessor = CreditRiskPreprocessor()
-x_train_t = preprocessor.fit_transform(x_train)
-x_validation_t = preprocessor.transform(x_validation)
-x_test_t = preprocessor.transform(x_test)
 
 trainer = BoostingModelTrainer(random_state=settings.random_state)
-training_results = trainer.fit(
-    x_train_t,
-    split.y_train,
-    x_validation_t,
-    split.y_validation,
+baseline_results = trainer.fit(
+    x_train,
+    y_train,
+    x_validation,
+    y_validation,
 )
-best_result = BestModelSelector(metric=settings.selection_metric).select(training_results)
-best_result.model_name
+baseline_metrics = trainer.results_frame(baseline_results)
+best_baseline = BestModelSelector(metric=settings.selection_metric).select(
+    baseline_results
+)
+
+display(baseline_metrics.round(4))
+{
+    "best_baseline_model": best_baseline.model_name,
+    "model_selected_for_optuna": "CatBoost",
+}
 """
         ),
-        markdown("## 4. Evaluate on isolated internal test"),
+        markdown("## 4. Baseline metric visuals"),
+        code(
+            """
+from credit_risk_lab.infrastructure.visualization import plot_model_comparison
+
+catboost_baseline_metrics = baseline_metrics[
+    baseline_metrics["model"].eq("CatBoost")
+].copy()
+
+plot_model_comparison(baseline_metrics).show()
+display(catboost_baseline_metrics.round(4))
+"""
+        ),
+        markdown("## 5. Configure CatBoost Optuna search"),
+        code(
+            """
+model_to_optimize = "CatBoost"
+n_trials = 50
+optimization_metric = "roc_auc"
+
+if best_baseline.model_name != model_to_optimize:
+    print(
+        f"Baseline winner is {best_baseline.model_name}, "
+        f"but this project decision is to optimize {model_to_optimize}."
+    )
+
+{
+    "model_to_optimize": model_to_optimize,
+    "n_trials": n_trials,
+    "optimization_metric": optimization_metric,
+    "test_policy": "data/raw/test.csv remains untouched",
+}
+"""
+        ),
+        markdown("## 6. Run Optuna search on CatBoost"),
+        code(
+            """
+from credit_risk_lab.infrastructure.modeling import CatBoostOptunaTuner
+
+catboost_tuner = CatBoostOptunaTuner(
+    random_state=settings.random_state,
+    metric=optimization_metric,
+    n_trials=n_trials,
+)
+tuning_result = catboost_tuner.tune(
+    x_train=x_train,
+    y_train=y_train,
+    x_validation=x_validation,
+    y_validation=y_validation,
+)
+
+display(tuning_result.trials.head(10))
+pd.DataFrame(
+    [
+        {
+            "model": tuning_result.model_name,
+            "best_value": tuning_result.best_value,
+            "threshold": tuning_result.threshold,
+            **tuning_result.metrics,
+        }
+    ]
+).round(4)
+"""
+        ),
+        markdown("## 7. Analyze tuning improvement"),
+        code(
+            """
+from credit_risk_lab.infrastructure.visualization import (
+    plot_metric_improvement,
+    plot_optuna_param_importance,
+    plot_optuna_parameter_slices,
+    plot_optuna_trials,
+)
+
+tuned_metrics = pd.DataFrame(
+    [
+        {
+            "model": tuning_result.model_name,
+            "threshold": tuning_result.threshold,
+            **tuning_result.metrics,
+        }
+    ]
+)
+
+plot_optuna_trials(tuning_result.trials, metric=optimization_metric).show()
+plot_optuna_param_importance(
+    tuning_result.study,
+    metric=optimization_metric,
+).show()
+plot_optuna_parameter_slices(
+    tuning_result.trials,
+    metric=optimization_metric,
+    parameters=[
+        "iterations",
+        "depth",
+        "learning_rate",
+        "l2_leaf_reg",
+        "random_strength",
+        "auto_class_weights",
+    ],
+).show()
+plot_metric_improvement(
+    baseline_metrics,
+    tuned_metrics,
+    model_name="CatBoost",
+).show()
+
+comparison = pd.concat(
+    [
+        catboost_baseline_metrics.assign(stage="baseline"),
+        tuned_metrics.assign(stage="optuna_tuned"),
+    ],
+    ignore_index=True,
+)
+display(comparison.round(4))
+"""
+        ),
+        markdown("## 8. Optimized CatBoost feature importance"),
+        code(
+            """
+from credit_risk_lab.infrastructure.modeling import CatBoostFeatureImportanceAnalyzer
+from credit_risk_lab.infrastructure.visualization import plot_feature_importance
+
+top_n_features = 20
+optimized_importance = CatBoostFeatureImportanceAnalyzer(
+    tuning_result.model,
+    feature_names=x_train.columns.tolist(),
+).importance_frame(top_n=top_n_features)
+
+display(optimized_importance.round(4))
+plot_feature_importance(
+    optimized_importance,
+    title=f"Top {top_n_features} optimized CatBoost feature importances",
+).show()
+"""
+        ),
+        markdown("## 9. Save optimized CatBoost bundle"),
+        code(
+            """
+from credit_risk_lab.application.workflows import current_git_commit
+from credit_risk_lab.infrastructure.modeling import JoblibModelBundleRepository, sha256_file
+
+metadata = {
+    "model_name": tuning_result.model_name,
+    "validation_metrics": tuning_result.metrics,
+    "best_hyperparameters": tuning_result.best_parameters,
+    "optimization_engine": "optuna",
+    "optimization_metric": optimization_metric,
+    "optuna_best_value": tuning_result.best_value,
+    "optuna_trials": n_trials,
+    "selection_metric": optimization_metric,
+    "split_strategy": "raw_train_to_processed_train_validation_then_external_test",
+    "training_dataset_sha256": sha256_file(settings.train_path),
+    "validation_dataset_sha256": sha256_file(settings.validation_path),
+    "preprocessing_artifact_sha256": sha256_file(settings.preprocessing_artifact_path),
+    "models_config_sha256": sha256_file(settings.models_config_path),
+    "git_commit": current_git_commit(),
+    "target_definition": "loan_status=1 is the synthetic positive risk class",
+}
+
+bundle_path = JoblibModelBundleRepository().save(
+    settings.model_bundle_path,
+    model=tuning_result.model,
+    preprocessor=preprocessor.transformer,
+    threshold=tuning_result.threshold,
+    metadata=metadata,
+)
+
+{
+    "selected_tuned_model": tuning_result.model_name,
+    "threshold": tuning_result.threshold,
+    "parameters": tuning_result.best_parameters,
+    "bundle_path": str(bundle_path),
+}
+"""
+        ),
+    ],
+)
+
+
+evaluation = notebook(
+    "06 - Model Evaluation and Persistence",
+    "évaluer le modèle tuné sauvegardé sur le test final untouched, puis persister les rapports finaux.",
+    [
+        setup,
+        markdown("## 1. Load tuned model bundle"),
+        code(
+            """
+from credit_risk_lab.infrastructure.modeling import JoblibModelBundleRepository
+
+repository = JoblibModelBundleRepository()
+bundle = repository.load(settings.model_bundle_path)
+bundle["metadata"]
+"""
+        ),
+        markdown("## 2. Load untouched external test"),
+        code(
+            """
+from credit_risk_lab.infrastructure import CreditRiskQualityChecker
+from credit_risk_lab.infrastructure.data_sources import CsvLoanDataLoader
+
+raw_test_df = CsvLoanDataLoader(path=settings.raw_test_path).load()
+clean_test_df = CreditRiskQualityChecker().clean(raw_test_df)
+
+{
+    "raw_test_path": str(settings.raw_test_path),
+    "raw_test_rows": len(raw_test_df),
+    "clean_test_rows": len(clean_test_df),
+}
+"""
+        ),
+        markdown("## 3. Score external test"),
+        code(
+            """
+from credit_risk_lab.application import RawLoanScorer
+
+scorer = RawLoanScorer(bundle)
+scoring_result = scorer.score(clean_test_df)
+y_test = clean_test_df[settings.target_column].astype(int)
+test_probabilities = scoring_result.probabilities
+sensitive_test = clean_test_df[
+    [column for column in settings.sensitive_columns if column in clean_test_df]
+]
+
+{
+    "model": scoring_result.model_name,
+    "threshold": scoring_result.threshold,
+    "scored_rows": len(test_probabilities),
+}
+"""
+        ),
+        markdown("## 4. Final test metrics"),
         code(
             """
 from credit_risk_lab.infrastructure.evaluation import CreditRiskModelEvaluator
 
 evaluator = CreditRiskModelEvaluator()
-test_probabilities = best_result.model.predict_proba(x_test_t)
 test_metrics = evaluator.metrics_frame(
-    best_result.model_name,
-    split.y_test,
+    scoring_result.model_name,
+    y_test,
     test_probabilities,
-    best_result.threshold,
+    scoring_result.threshold,
 )
+test_metrics.to_csv(settings.reports_dir / "external_test_metrics.csv", index=False)
 test_metrics.round(4)
 """
         ),
-        markdown("## 5. Calibration"),
+        markdown("## 5. Confusion matrix and ROC-AUC"),
+        code(
+            """
+from credit_risk_lab.infrastructure.visualization import plot_confusion_matrix_and_roc
+
+plot_confusion_matrix_and_roc(
+    y_test,
+    test_probabilities,
+    threshold=scoring_result.threshold,
+    model_name=scoring_result.model_name,
+).show()
+"""
+        ),
+        markdown("## 6. Threshold trade-off analysis"),
+        code(
+            """
+from credit_risk_lab.infrastructure.evaluation import (
+    ThresholdAnalysisConfig,
+    ThresholdAnalyzer,
+)
+from credit_risk_lab.infrastructure.visualization import plot_threshold_tradeoff
+
+threshold_config = ThresholdAnalysisConfig(
+    start=0.02,
+    stop=0.42,
+    step=0.04,
+)
+threshold_grid = ThresholdAnalyzer(threshold_config).grid(y_test, test_probabilities)
+threshold_grid.to_csv(
+    settings.reports_dir / "external_test_threshold_grid.csv",
+    index=False,
+)
+
+print(threshold_grid.to_string(index=False))
+plot_threshold_tradeoff(
+    threshold_grid,
+    selected_threshold=scoring_result.threshold,
+).show()
+"""
+        ),
+        markdown("## 7. Lift, gain, and accumulation analysis"),
+        code(
+            """
+from credit_risk_lab.infrastructure.evaluation import lift_gain_table
+from credit_risk_lab.infrastructure.visualization import plot_lift_gain_accumulation
+
+lift_gain = lift_gain_table(y_test, test_probabilities, bins=10)
+lift_gain.to_csv(settings.reports_dir / "external_test_lift_gain.csv", index=False)
+
+display(lift_gain.round(4))
+plot_lift_gain_accumulation(lift_gain).show()
+"""
+        ),
+        markdown("## 8. Bootstrap confidence intervals"),
+        code(
+            """
+from credit_risk_lab.infrastructure.evaluation import bootstrap_metric_intervals
+from credit_risk_lab.infrastructure.visualization import plot_metric_confidence_intervals
+
+metric_intervals = bootstrap_metric_intervals(
+    y_test,
+    test_probabilities,
+    scoring_result.threshold,
+    n_bootstrap=300,
+    confidence_level=0.95,
+    random_state=settings.random_state,
+)
+metric_intervals.to_csv(
+    settings.reports_dir / "external_test_metric_intervals.csv",
+    index=False,
+)
+
+display(metric_intervals.round(4))
+plot_metric_confidence_intervals(metric_intervals).show()
+"""
+        ),
+        markdown("## 9. Calibration"),
         code(
             """
 from credit_risk_lab.infrastructure.evaluation import CalibrationEvaluator
 from credit_risk_lab.infrastructure.visualization import plot_calibration
 
 calibration = CalibrationEvaluator(bins=10).evaluate(
-    split.y_test,
+    y_test,
     test_probabilities,
 )
+calibration.to_csv(settings.reports_dir / "external_test_calibration.csv", index=False)
 
 display(calibration.round(4))
-plot_calibration(calibration, best_result.model_name).show()
+plot_calibration(calibration, scoring_result.model_name).show()
 """
         ),
-        markdown("## 6. Fairness diagnostics"),
+        markdown("## 10. Fairness diagnostics"),
         code(
             """
 from credit_risk_lab.infrastructure.evaluation import FairnessEvaluator
 
 fairness = FairnessEvaluator(min_group_size=30).evaluate(
-    split.y_test,
+    y_test,
     test_probabilities,
     sensitive_test,
-    best_result.threshold,
+    scoring_result.threshold,
 )
+fairness.to_csv(settings.reports_dir / "external_test_fairness.csv", index=False)
 fairness
 """
         ),
-        markdown("## 7. Build metadata"),
+        markdown("## 11. Persist final metadata report"),
         code(
             """
-from credit_risk_lab.application.workflows import current_git_commit
 from credit_risk_lab.infrastructure.modeling import sha256_file
 
-metadata = {
-    "model_name": best_result.model_name,
-    "test_metrics": test_metrics.iloc[0].to_dict(),
-    "selection_metric": settings.selection_metric,
-    "split_strategy": settings.split_strategy,
-    "training_dataset_sha256": sha256_file(settings.train_path),
+final_metadata = {
+    **bundle["metadata"],
+    "external_test_metrics": test_metrics.iloc[0].to_dict(),
     "external_test_dataset_sha256": sha256_file(settings.raw_test_path),
-    "models_config_sha256": sha256_file(settings.models_config_path),
-    "git_commit": current_git_commit(),
-    "target_definition": "loan_status=1 is the synthetic positive risk class",
 }
 
-metadata
-"""
-        ),
-        markdown("## 8. Save model bundle explicitly"),
-        code(
-            """
-from credit_risk_lab.infrastructure.modeling import JoblibModelBundleRepository
-
-repository = JoblibModelBundleRepository()
-bundle_path = repository.save(
-    settings.model_bundle_path,
-    model=best_result.model,
-    preprocessor=preprocessor.transformer,
-    threshold=best_result.threshold,
-    metadata=metadata,
-)
-
-bundle_path
+pd.Series(final_metadata, name="value").to_frame()
 """
         ),
     ],
@@ -630,8 +1014,8 @@ bundle_path
 
 
 inference = notebook(
-    "06 - Inference and API Simulation",
-    "charger le bundle, scorer des dossiers bruts, puis vérifier le comportement API in-process.",
+    "07 - Batch and Realtime Inference",
+    "charger le bundle final, réaliser une inférence batch sur le test untouched, puis simuler des prédictions temps réel sans API.",
     [
         setup,
         markdown("## 1. Load external holdout"),
@@ -653,62 +1037,94 @@ bundle = repository.load(settings.model_bundle_path)
 bundle["metadata"]
 """
         ),
-        markdown("## 3. Score raw applications"),
+        markdown("## 3. Configure raw scorer"),
         code(
             """
 from credit_risk_lab.application import RawLoanScorer
 
 scorer = RawLoanScorer(bundle, threshold=settings.decision_threshold)
-scoring_result = scorer.score(holdout_df.head(20))
 
-pd.DataFrame(
-    {
-        "probability_of_risk": scoring_result.probabilities,
-        "risk_decision": scoring_result.decisions,
-    }
-).head()
+{
+    "model_name": bundle["metadata"].get("model_name"),
+    "serving_threshold": scorer.model_scorer.threshold,
+    "test_rows_available": len(holdout_df),
+}
 """
         ),
-        markdown("## 4. Validate one API payload"),
+        markdown("## 4. Batch inference on first test rows"),
         code(
             """
-from credit_risk_lab.interfaces.api_models import LoanApplication
+from credit_risk_lab.application import BatchInferenceRunner
 
-payload = holdout_df.drop(columns=[settings.target_column]).iloc[0].to_dict()
-application = LoanApplication.model_validate(payload)
-application
+batch_limit = 100
+submission_path = settings.reports_dir / "submission.csv"
+
+batch_runner = BatchInferenceRunner(scorer)
+batch_result = batch_runner.predict(
+    holdout_df,
+    output_path=submission_path,
+    limit=batch_limit,
+)
+
+print(f"Batch rows scored: {len(batch_result.submission)}")
+print(f"Submission saved to: {batch_result.output_path}")
+
+display(batch_result.submission.head(10))
 """
         ),
-        markdown("## 5. Predict through API service"),
-        code(
-            """
-from credit_risk_lab.interfaces.api_service import predict_application
-
-response = predict_application(application, request_id="notebook-demo")
-response
-"""
-        ),
-        markdown("## 6. In-process API simulation"),
-        code(
-            """
-from credit_risk_lab.interfaces.api_simulation import run_api_simulation
-
-simulation = run_api_simulation(limit=20)
-display(simulation.health)
-display(simulation.responses.head())
-{"invalid_status_code": simulation.invalid_status_code}
-"""
-        ),
-        markdown("## 7. Simulation distribution"),
+        markdown("## 5. Batch inference risk distribution"),
         code(
             """
 px.histogram(
-    simulation.responses,
+    batch_result.submission,
     x="probability_of_risk",
-    nbins=20,
-    title="Simulated API risk probabilities",
+    color="risk_label",
+    nbins=30,
+    title="Batch inference - predicted risk probabilities",
     template="plotly_white",
 ).show()
+"""
+        ),
+        markdown("## 6. Realtime inference simulation without API"),
+        code(
+            """
+from credit_risk_lab.application import RealtimeInferenceSimulator
+
+realtime_limit = 5
+simulator = RealtimeInferenceSimulator(
+    scorer,
+    min_pause_seconds=1,
+    max_pause_seconds=5,
+)
+
+realtime_events = simulator.stream(
+    holdout_df,
+    limit=realtime_limit,
+    request_prefix="loan-request",
+    print_events=True,
+)
+
+display(realtime_events)
+"""
+        ),
+        markdown("## 7. Realtime decision timeline"),
+        code(
+            """
+fig = px.line(
+    realtime_events,
+    x="request_id",
+    y="probability_of_risk",
+    markers=True,
+    title="Realtime simulation - request-level risk score",
+    template="plotly_white",
+)
+fig.add_hline(
+    y=settings.decision_threshold,
+    line_dash="dash",
+    line_color="black",
+    annotation_text=f"threshold={settings.decision_threshold:.3f}",
+)
+fig.show()
 """
         ),
     ],
@@ -720,8 +1136,9 @@ NOTEBOOKS = {
     "02_data_quality.ipynb": data_quality,
     "03_split_drift_feature_engineering.ipynb": split_drift,
     "04_preprocessing_and_training.ipynb": training,
-    "05_model_evaluation_and_persistence.ipynb": evaluation,
-    "06_inference_and_api_simulation.ipynb": inference,
+    "05_hyperparameter_tuning.ipynb": tuning,
+    "06_model_evaluation_and_persistence.ipynb": evaluation,
+    "07_batch_and_realtime_inference.ipynb": inference,
 }
 
 

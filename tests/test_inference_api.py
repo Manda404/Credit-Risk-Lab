@@ -2,7 +2,12 @@ import pandas as pd
 from fastapi.testclient import TestClient
 import pytest
 
-from credit_risk_lab.application import RawLoanScorer, create_deployment_split
+from credit_risk_lab.application import (
+    BatchInferenceRunner,
+    RawLoanScorer,
+    RealtimeInferenceSimulator,
+    create_deployment_split,
+)
 from credit_risk_lab.config.settings import settings
 from credit_risk_lab.infrastructure.modeling import load_model_bundle
 from credit_risk_lab.interfaces.api import app
@@ -96,3 +101,54 @@ def test_raw_scorer_rejects_missing_inference_feature():
     frame = pd.DataFrame([raw_application()]).drop(columns=["credit_score"])
     with pytest.raises(ValueError, match="credit_score"):
         RawLoanScorer(load_model_bundle(settings.model_bundle_path)).score(frame)
+
+
+def test_batch_inference_runner_writes_submission(tmp_path):
+    rows = []
+    for i in range(5):
+        row = raw_application()
+        row["loan_status"] = i % 2
+        row["person_income"] += i * 100
+        rows.append(row)
+
+    scorer = RawLoanScorer(load_model_bundle(settings.model_bundle_path))
+    runner = BatchInferenceRunner(scorer)
+    result = runner.predict(
+        pd.DataFrame(rows),
+        output_path=tmp_path / "submission.csv",
+        limit=3,
+    )
+
+    assert result.output_path.exists()
+    assert len(result.submission) == 3
+    assert {
+        "request_id",
+        "probability_of_risk",
+        "risk_decision",
+        "risk_label",
+        "risk_band",
+        "actual_label",
+        "is_correct",
+    }.issubset(result.submission.columns)
+
+
+def test_realtime_inference_simulator_streams_without_real_sleep():
+    pauses = []
+    scorer = RawLoanScorer(load_model_bundle(settings.model_bundle_path))
+    simulator = RealtimeInferenceSimulator(
+        scorer,
+        min_pause_seconds=1,
+        max_pause_seconds=1,
+        sleep_fn=pauses.append,
+    )
+
+    events = simulator.stream(
+        pd.DataFrame([raw_application(), raw_application(), raw_application()]),
+        limit=3,
+        print_events=False,
+    )
+
+    assert len(events) == 3
+    assert pauses == [1, 1]
+    assert events["probability_of_risk"].between(0, 1).all()
+    assert set(events["risk_decision"]).issubset({0, 1})

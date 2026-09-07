@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     train_file: str = "train.csv"
     validation_file: str = "validation.csv"
     test_file: str = "test.csv"
+    preprocessing_artifact_file: str = "credit_risk_preprocessor.joblib"
 
     model_bundle_file: str = "best_boosting_model.joblib"
     metrics_report_file: str = "boosting_model_metrics.csv"
@@ -186,6 +187,11 @@ class Settings(BaseSettings):
     @property
     def test_path(self) -> Path:
         return self.processed_dir / self.test_file
+
+    @property
+    def preprocessing_artifact_path(self) -> Path:
+        """Fitted preprocessing pipeline used to transform validation and test data."""
+        return self.processed_dir / self.preprocessing_artifact_file
 
     @property
     def model_bundle_path(self) -> Path:

@@ -12,7 +12,7 @@ pandas = "^2.2.0"
 loguru = "^0.7.2"
 scikit-learn = "^1.5.0"
 xgboost = "^2.0.3"
-catboost = { version = "^1.2.5", optional = true, markers = "python_version < '3.14'" }
+catboost = "^1.2.10"
 lightgbm = "^4.6.0"
 pyyaml = "^6.0"
 mlflow = "^3.6.0"
@@ -20,6 +20,7 @@ python-dotenv = "^1.2.1"
 plotly = "^6.4.0"
 nbformat = "^5.10.4"
 joblib = "^1.4.0"
+optuna = "^4.6.0"
 
 # Optionnel mais recommandé pour un projet Credit Risk
 # car utile pour le PSI, KS, p-values, tests stat...
@@ -29,9 +30,6 @@ fastapi = "^0.115.0"
 uvicorn = {version = "^0.30.0", extras = ["standard"]}
 pydantic-settings = "^2.12.0"
 autocarver = "^7.5.1"
-
-[tool.poetry.extras]
-catboost = ["catboost"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

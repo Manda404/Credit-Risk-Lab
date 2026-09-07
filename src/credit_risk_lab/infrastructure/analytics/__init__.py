@@ -3,6 +3,7 @@ from .data_analysis import DataAnalyzer
 from .data_leakage import DataLeakageAuditor
 from .dataset_inspector import DatasetInspector, DatasetSummary
 from .drift_analysis import DriftAnalyzer
+from .feature_engineering_report import FeatureEngineeringReport
 
 __all__ = [
     "ColumnDiagnostics",
@@ -11,5 +12,6 @@ __all__ = [
     "DatasetInspector",
     "DatasetSummary",
     "DriftAnalyzer",
+    "FeatureEngineeringReport",
     "OutlierConfig",
 ]

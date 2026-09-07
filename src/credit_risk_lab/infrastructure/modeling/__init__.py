@@ -6,6 +6,13 @@ from .boosting_trainer import (
     CandidateTrainingResult,
 )
 from .credit_risk_preprocessor import CreditRiskPreprocessor
+from .feature_importance import CatBoostFeatureImportanceAnalyzer
+from .hyperparameter_tuning import (
+    CatBoostOptunaTuner,
+    ModelHyperparameterTuner,
+    OptunaTuningResult,
+    TuningCandidateResult,
+)
 from .preprocessing import build_preprocessor
 from .artifacts import (
     load_model_bundle,
@@ -31,6 +38,11 @@ __all__ = [
     "build_preprocessor",
     "CandidateTrainingResult",
     "CreditRiskPreprocessor",
+    "CatBoostFeatureImportanceAnalyzer",
+    "CatBoostOptunaTuner",
+    "ModelHyperparameterTuner",
+    "OptunaTuningResult",
+    "TuningCandidateResult",
     "load_models_config",
     "save_model_bundle",
     "load_model_bundle",

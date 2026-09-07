@@ -15,11 +15,12 @@ def test_models_are_instantiated_from_versioned_yaml():
         "LogisticRegression",
         "RandomForest",
         "XGBoost",
-        "LightGBM",
+        "CatBoost",
     ]
-    assert config.models["catboost"].enabled is False
+    assert config.models["lightgbm"].enabled is False
+    assert config.models["catboost"].enabled is True
     xgboost = next(model for model in models if model.name == "XGBoost")
-    assert xgboost.parameters["learning_rate"] == 0.06
+    assert xgboost.parameters["eval_metric"] == "logloss"
     assert xgboost.model.get_params()["random_state"] == 7
 
 
