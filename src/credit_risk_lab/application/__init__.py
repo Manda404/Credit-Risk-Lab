@@ -8,6 +8,8 @@ from .dataset_splitting import (
 from .scoring import (
     BatchInferenceResult,
     BatchInferenceRunner,
+    InferenceInputValidator,
+    InferenceValidationResult,
     ModelScorer,
     RawLoanScorer,
     RealtimeInferenceEvent,
@@ -28,6 +30,8 @@ __all__ = [
     "ScoringResult",
     "BatchInferenceResult",
     "BatchInferenceRunner",
+    "InferenceInputValidator",
+    "InferenceValidationResult",
     "RealtimeInferenceEvent",
     "RealtimeInferenceSimulator",
     "DeploymentSplitResult",

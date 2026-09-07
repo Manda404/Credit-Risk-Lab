@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from credit_risk_lab.config.settings import settings
+from credit_risk_lab.domain.entities import LoanSchema
 from credit_risk_lab.infrastructure.feature_engineering import LoanFeatureEngineer
 from credit_risk_lab.shared.logging import setup_logger
 
@@ -29,6 +30,8 @@ class BatchInferenceResult:
     """Submission output and destination path produced by batch inference."""
 
     submission: pd.DataFrame
+    rejected_rows: pd.DataFrame
+    warning_rows: pd.DataFrame
     output_path: Path
 
 
@@ -43,6 +46,183 @@ class RealtimeInferenceEvent:
     threshold: float
     model_name: str
     pause_seconds: float
+
+
+@dataclass(frozen=True)
+class InferenceValidationResult:
+    """Validated inference rows and row-level rejection report."""
+
+    valid_frame: pd.DataFrame
+    rejected_rows: pd.DataFrame
+    warning_rows: pd.DataFrame
+
+    @property
+    def accepted_rows(self) -> int:
+        return len(self.valid_frame)
+
+    @property
+    def rejected_count(self) -> int:
+        return len(self.rejected_rows)
+
+    @property
+    def warning_count(self) -> int:
+        return len(self.warning_rows)
+
+
+class InferenceInputValidator:
+    """Validate raw loan applications before batch or realtime scoring."""
+
+    NUMERIC_RULES = {
+        "person_age": (18, 100, True, True),
+        "person_income": (0, None, False, False),
+        "person_emp_exp": (0, 80, True, True),
+        "loan_amnt": (0, None, False, False),
+        "loan_int_rate": (0, 100, True, True),
+        "loan_percent_income": (0, None, True, False),
+        "cb_person_cred_hist_length": (0, None, True, False),
+        "credit_score": (300, 900, True, True),
+    }
+    CATEGORICAL_ALLOWED_VALUES = {
+        "person_gender": {"female", "male", "non_binary"},
+        "person_education": {
+            "Associate",
+            "Bachelor",
+            "Doctorate",
+            "High School",
+            "Master",
+        },
+        "person_home_ownership": {"MORTGAGE", "OTHER", "OWN", "RENT"},
+        "loan_intent": {
+            "DEBTCONSOLIDATION",
+            "EDUCATION",
+            "HOMEIMPROVEMENT",
+            "MEDICAL",
+            "PERSONAL",
+            "VENTURE",
+        },
+        "previous_loan_defaults_on_file": {"No", "Yes"},
+    }
+
+    def __init__(
+        self,
+        *,
+        schema: LoanSchema | None = None,
+        target_column: str = settings.target_column,
+        logger_name: str = "inference_validation",
+    ):
+        self.schema = schema or LoanSchema()
+        self.target_column = target_column
+        self.logger = setup_logger(logger_name)
+
+    def validate(self, raw_frame: pd.DataFrame) -> InferenceValidationResult:
+        """Return valid rows and rejected rows with human-readable reasons."""
+        self._validate_required_columns(raw_frame)
+        if raw_frame.empty:
+            raise ValueError("Cannot validate an empty inference dataset")
+
+        invalid_records = []
+        warning_records = []
+        valid_indices = []
+
+        for index, row in raw_frame.iterrows():
+            reasons, warnings = self._row_diagnostics(row)
+            if reasons:
+                invalid_records.append(
+                    {
+                        "source_row_index": index,
+                        "rejection_reason": "; ".join(reasons),
+                    }
+                )
+            else:
+                valid_indices.append(index)
+                if warnings:
+                    warning_records.append(
+                        {
+                            "source_row_index": index,
+                            "warning_reason": "; ".join(warnings),
+                        }
+                    )
+
+        rejected = pd.DataFrame(
+            invalid_records,
+            columns=["source_row_index", "rejection_reason"],
+        )
+        warning = pd.DataFrame(
+            warning_records,
+            columns=["source_row_index", "warning_reason"],
+        )
+        valid = raw_frame.loc[valid_indices].copy()
+
+        self.logger.info(
+            "Inference input validation completed: accepted={} rejected={} warnings={}",
+            len(valid),
+            len(rejected),
+            len(warning),
+        )
+        return InferenceValidationResult(
+            valid_frame=valid,
+            rejected_rows=rejected,
+            warning_rows=warning,
+        )
+
+    def _validate_required_columns(self, raw_frame: pd.DataFrame) -> None:
+        missing = sorted(
+            set(self.schema.raw_feature_columns).difference(raw_frame.columns)
+        )
+        if missing:
+            raise ValueError(f"Missing inference input columns: {missing}")
+
+    def _row_diagnostics(self, row: pd.Series) -> tuple[list[str], list[str]]:
+        errors = []
+        warnings = []
+        for column in self.schema.raw_feature_columns:
+            value = row[column]
+            if pd.isna(value):
+                errors.append(f"{column} is missing")
+
+        if errors:
+            return errors, warnings
+
+        for column, (
+            minimum,
+            maximum,
+            inclusive_min,
+            inclusive_max,
+        ) in self.NUMERIC_RULES.items():
+            value = row[column]
+            if not isinstance(value, (int, float, np.integer, np.floating)):
+                errors.append(f"{column} must be numeric")
+                continue
+            if minimum is not None:
+                invalid_min = value < minimum if inclusive_min else value <= minimum
+                if invalid_min:
+                    operator = ">=" if inclusive_min else ">"
+                    errors.append(f"{column} must be {operator} {minimum}")
+            if maximum is not None:
+                invalid_max = value > maximum if inclusive_max else value >= maximum
+                if invalid_max:
+                    operator = "<=" if inclusive_max else "<"
+                    errors.append(f"{column} must be {operator} {maximum}")
+
+        categorical_columns = [
+            column
+            for column in self.schema.raw_feature_columns
+            if column not in self.NUMERIC_RULES
+        ]
+        for column in categorical_columns:
+            value = str(row[column]).strip()
+            if not value:
+                errors.append(f"{column} must not be empty")
+            elif value not in self.CATEGORICAL_ALLOWED_VALUES.get(column, set()):
+                warnings.append(f"{column} has unknown category {value!r}")
+
+        if row["person_emp_exp"] > row["person_age"] - 14:
+            errors.append("person_emp_exp is implausible for person_age")
+
+        if self.target_column in row.index and row[self.target_column] not in {0, 1}:
+            errors.append(f"{self.target_column} must be 0 or 1 when provided")
+
+        return errors, warnings
 
 
 class ModelScorer:
@@ -113,17 +293,21 @@ class BatchInferenceRunner:
         "loan_int_rate",
         "loan_percent_income",
         "loan_intent",
-        "cb_person_default_on_file",
+        "previous_loan_defaults_on_file",
     )
 
     def __init__(
         self,
         scorer: RawLoanScorer,
+        validator: InferenceInputValidator | None = None,
         *,
         target_column: str = settings.target_column,
         logger_name: str = "batch_inference",
     ):
         self.scorer = scorer
+        self.validator = validator or InferenceInputValidator(
+            target_column=target_column
+        )
         self.target_column = target_column
         self.logger = setup_logger(logger_name)
 
@@ -141,14 +325,34 @@ class BatchInferenceRunner:
         frame = raw_frame.head(limit).copy() if limit is not None else raw_frame.copy()
         self.logger.info("Starting batch inference on {} rows", len(frame))
 
-        scoring = self.scorer.score(frame)
-        submission = self._build_submission(frame, scoring)
+        validation = self.validator.validate(frame)
+        if validation.valid_frame.empty:
+            raise ValueError("No valid rows available for batch inference")
+
+        if validation.rejected_count:
+            self.logger.warning(
+                "Batch inference rejected {} invalid rows",
+                validation.rejected_count,
+            )
+        if validation.warning_count:
+            self.logger.warning(
+                "Batch inference accepted {} rows with validation warnings",
+                validation.warning_count,
+            )
+
+        scoring = self.scorer.score(validation.valid_frame)
+        submission = self._build_submission(validation.valid_frame, scoring)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         submission.to_csv(output_path, index=False)
         self.logger.info("Batch inference file saved to {}", output_path)
 
-        return BatchInferenceResult(submission=submission, output_path=output_path)
+        return BatchInferenceResult(
+            submission=submission,
+            rejected_rows=validation.rejected_rows,
+            warning_rows=validation.warning_rows,
+            output_path=output_path,
+        )
 
     def _build_submission(
         self,
@@ -168,7 +372,7 @@ class BatchInferenceRunner:
                     "high_risk",
                     "low_risk",
                 ),
-                "risk_band": self._risk_band(scoring.probabilities),
+                "risk_band": self._risk_band(scoring.probabilities, scoring.threshold),
             }
         )
         available_context = [c for c in self.CONTEXT_COLUMNS if c in frame.columns]
@@ -184,15 +388,15 @@ class BatchInferenceRunner:
         return submission
 
     @staticmethod
-    def _risk_band(probabilities: np.ndarray) -> np.ndarray:
+    def _risk_band(probabilities: np.ndarray, threshold: float) -> np.ndarray:
+        low_cutoff = min(0.10, threshold)
         return np.select(
             [
-                probabilities < 0.20,
-                probabilities < 0.50,
-                probabilities < 0.80,
+                probabilities < low_cutoff,
+                probabilities < threshold,
             ],
-            ["low", "medium", "high"],
-            default="critical",
+            ["low_risk", "watchlist"],
+            default="high_risk",
         )
 
 
@@ -202,6 +406,7 @@ class RealtimeInferenceSimulator:
     def __init__(
         self,
         scorer: RawLoanScorer,
+        validator: InferenceInputValidator | None = None,
         *,
         min_pause_seconds: float = 1.0,
         max_pause_seconds: float = 5.0,
@@ -211,6 +416,7 @@ class RealtimeInferenceSimulator:
         if min_pause_seconds < 0 or max_pause_seconds < min_pause_seconds:
             raise ValueError("Invalid pause interval")
         self.scorer = scorer
+        self.validator = validator or InferenceInputValidator()
         self.min_pause_seconds = min_pause_seconds
         self.max_pause_seconds = max_pause_seconds
         self.sleep_fn = sleep_fn
@@ -239,7 +445,22 @@ class RealtimeInferenceSimulator:
             request_id = f"{request_prefix}-{position:06d}"
 
             self.logger.info("Receiving request {}", request_id)
-            scoring = self.scorer.score(pd.DataFrame([row]))
+            single_request = pd.DataFrame([row])
+            validation = self.validator.validate(single_request)
+            if validation.valid_frame.empty:
+                reason = validation.rejected_rows["rejection_reason"].iloc[0]
+                message = f"{request_id} | rejected | reason={reason}"
+                self.logger.warning(message)
+                if print_events:
+                    print(message)
+                if position < len(rows):
+                    self.sleep_fn(pause)
+                continue
+            if validation.warning_count:
+                warning = validation.warning_rows["warning_reason"].iloc[0]
+                self.logger.warning("{} | warning | {}", request_id, warning)
+
+            scoring = self.scorer.score(validation.valid_frame)
 
             event = RealtimeInferenceEvent(
                 request_id=request_id,

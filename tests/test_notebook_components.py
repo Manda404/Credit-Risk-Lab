@@ -38,6 +38,7 @@ from credit_risk_lab.infrastructure.visualization import (
     plot_optuna_trials,
     plot_threshold_tradeoff,
 )
+from credit_risk_lab.application.workflows import CreditRiskMLOpsPipeline
 
 
 def test_dataset_inspector_exposes_progressive_diagnostics(credit_risk_sample):
@@ -53,6 +54,14 @@ def test_dataset_inspector_exposes_progressive_diagnostics(credit_risk_sample):
     assert inspector.missing_values().empty
     assert set(inspector.target_distribution("loan_status")["class"]) == {0, 1}
     assert "credit_score" in inspector.numeric_profile().index
+
+
+def test_end_to_end_pipeline_can_be_configured_without_running():
+    pipeline = CreditRiskMLOpsPipeline()
+    smoke_pipeline = CreditRiskMLOpsPipeline(optuna_trials=1)
+
+    assert pipeline.optuna_trials >= 1
+    assert smoke_pipeline.optuna_trials == 1
 
 
 def test_target_distribution_visual_uses_bar_and_pie_with_class_labels(

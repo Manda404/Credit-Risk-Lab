@@ -1,0 +1,2 @@
+trial,value,state,iterations,depth,learning_rate,l2_leaf_reg,random_strength,bagging_temperature,border_count,min_data_in_leaf,rsm,auto_class_weights
+0,0.9748141680337267,COMPLETE,574,10,0.1001303991139125,5.800632299933359,0.22856175997064757,0.3119890406724053,45,70,0.8005575058716043,SqrtBalanced

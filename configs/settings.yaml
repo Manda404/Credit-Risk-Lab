@@ -18,6 +18,8 @@ test_size: 0.20
 validation_size: 0.20
 
 selection_metric: "roc_auc"
+optuna_trials: 50
+minimum_validation_roc_auc: 0.98
 split_strategy: "random_experimental"
 decision_date_column: null
 borrower_id_column: null
@@ -48,12 +50,14 @@ raw_data_sep: ","
 raw_data_encoding: "utf-8"
 raw_train_file: "train.csv"
 raw_test_file: "test.csv"
+raw_split_manifest_file: "split_manifest.json"
 modeling_dataset_file: "modeling_dataset.csv"
 train_file: "train.csv"
 validation_file: "validation.csv"
 test_file: "test.csv"
 
 model_bundle_file: "best_boosting_model.joblib"
+candidate_model_bundle_file: "candidates/candidate_model.joblib"
 metrics_report_file: "boosting_model_metrics.csv"
 models_config_file: "models.yaml"
 drift_report_file: "deployment_split_drift.csv"

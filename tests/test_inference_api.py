@@ -4,6 +4,7 @@ import pytest
 
 from credit_risk_lab.application import (
     BatchInferenceRunner,
+    InferenceInputValidator,
     RawLoanScorer,
     RealtimeInferenceSimulator,
     create_deployment_split,
@@ -103,6 +104,43 @@ def test_raw_scorer_rejects_missing_inference_feature():
         RawLoanScorer(load_model_bundle(settings.model_bundle_path)).score(frame)
 
 
+def test_inference_input_validator_rejects_invalid_rows():
+    valid = raw_application()
+    invalid = raw_application()
+    invalid["person_age"] = 20
+    invalid["person_emp_exp"] = 10
+
+    result = InferenceInputValidator().validate(pd.DataFrame([valid, invalid]))
+
+    assert result.accepted_rows == 1
+    assert result.rejected_count == 1
+    assert "implausible" in result.rejected_rows["rejection_reason"].iloc[0]
+
+
+def test_inference_input_validator_warns_on_unknown_category_without_rejecting():
+    row = raw_application()
+    row["loan_intent"] = "SPACE_TRAVEL"
+
+    result = InferenceInputValidator().validate(pd.DataFrame([row]))
+
+    assert result.accepted_rows == 1
+    assert result.rejected_count == 0
+    assert result.warning_count == 1
+    assert "loan_intent" in result.warning_rows["warning_reason"].iloc[0]
+
+
+def test_inference_input_validator_rejects_empty_category():
+    row = raw_application()
+    row["loan_intent"] = " "
+
+    result = InferenceInputValidator().validate(pd.DataFrame([row]))
+
+    assert result.accepted_rows == 0
+    assert result.rejected_count == 1
+    assert result.warning_count == 0
+    assert "must not be empty" in result.rejected_rows["rejection_reason"].iloc[0]
+
+
 def test_batch_inference_runner_writes_submission(tmp_path):
     rows = []
     for i in range(5):
@@ -130,6 +168,25 @@ def test_batch_inference_runner_writes_submission(tmp_path):
         "actual_label",
         "is_correct",
     }.issubset(result.submission.columns)
+    assert result.warning_rows.empty
+
+
+def test_batch_inference_runner_skips_invalid_rows(tmp_path):
+    valid = raw_application()
+    invalid = raw_application()
+    invalid["credit_score"] = 100
+
+    scorer = RawLoanScorer(load_model_bundle(settings.model_bundle_path))
+    runner = BatchInferenceRunner(scorer)
+    result = runner.predict(
+        pd.DataFrame([valid, invalid]),
+        output_path=tmp_path / "submission.csv",
+    )
+
+    assert len(result.submission) == 1
+    assert len(result.rejected_rows) == 1
+    assert result.warning_rows.empty
+    assert "credit_score" in result.rejected_rows["rejection_reason"].iloc[0]
 
 
 def test_realtime_inference_simulator_streams_without_real_sleep():

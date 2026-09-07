@@ -519,11 +519,9 @@ from credit_risk_lab.infrastructure.modeling import BestModelSelector
 selector = BestModelSelector(metric=settings.selection_metric)
 best_result = selector.select(training_results)
 
-{
-    "selected_model": best_result.model_name,
-    "selection_metric": settings.selection_metric,
-    "threshold": best_result.threshold,
-}
+print(f"Selected model: {best_result.model_name}")
+print(f"Selection metric: {settings.selection_metric}")
+print(f"Selected threshold: {best_result.threshold:.4f}")
 """
         ),
         markdown("## 6. Training curves"),
@@ -658,7 +656,7 @@ display(catboost_baseline_metrics.round(4))
         code(
             """
 model_to_optimize = "CatBoost"
-n_trials = 50
+n_trials = settings.optuna_trials
 optimization_metric = "roc_auc"
 
 if best_baseline.model_name != model_to_optimize:
@@ -1037,12 +1035,13 @@ bundle = repository.load(settings.model_bundle_path)
 bundle["metadata"]
 """
         ),
-        markdown("## 3. Configure raw scorer"),
+        markdown("## 3. Configure raw scorer and input validator"),
         code(
             """
-from credit_risk_lab.application import RawLoanScorer
+from credit_risk_lab.application import InferenceInputValidator, RawLoanScorer
 
 scorer = RawLoanScorer(bundle, threshold=settings.decision_threshold)
+input_validator = InferenceInputValidator()
 
 {
     "model_name": bundle["metadata"].get("model_name"),
@@ -1051,41 +1050,60 @@ scorer = RawLoanScorer(bundle, threshold=settings.decision_threshold)
 }
 """
         ),
-        markdown("## 4. Batch inference on first test rows"),
+        markdown("## 4. Validate batch input sample"),
+        code(
+            """
+batch_limit = 100
+batch_input = holdout_df.head(batch_limit)
+batch_validation = input_validator.validate(batch_input)
+
+print(f"Rows received: {len(batch_input)}")
+print(f"Rows accepted: {batch_validation.accepted_rows}")
+print(f"Rows rejected: {batch_validation.rejected_count}")
+print(f"Rows with warnings: {batch_validation.warning_count}")
+
+print("Rejected rows")
+display(batch_validation.rejected_rows.head(10))
+
+print("Warning rows")
+display(batch_validation.warning_rows.head(10))
+"""
+        ),
+        markdown("## 5. Batch inference on valid test rows"),
         code(
             """
 from credit_risk_lab.application import BatchInferenceRunner
 
-batch_limit = 100
 submission_path = settings.reports_dir / "submission.csv"
 
-batch_runner = BatchInferenceRunner(scorer)
+batch_runner = BatchInferenceRunner(scorer, validator=input_validator)
 batch_result = batch_runner.predict(
-    holdout_df,
+    batch_input,
     output_path=submission_path,
-    limit=batch_limit,
 )
 
 print(f"Batch rows scored: {len(batch_result.submission)}")
+print(f"Batch rows rejected: {len(batch_result.rejected_rows)}")
+print(f"Batch rows with warnings: {len(batch_result.warning_rows)}")
 print(f"Submission saved to: {batch_result.output_path}")
 
 display(batch_result.submission.head(10))
 """
         ),
-        markdown("## 5. Batch inference risk distribution"),
+        markdown("## 6. Batch inference risk distribution"),
         code(
             """
 px.histogram(
     batch_result.submission,
     x="probability_of_risk",
-    color="risk_label",
+    color="risk_band",
     nbins=30,
     title="Batch inference - predicted risk probabilities",
     template="plotly_white",
 ).show()
 """
         ),
-        markdown("## 6. Realtime inference simulation without API"),
+        markdown("## 7. Realtime inference simulation without API"),
         code(
             """
 from credit_risk_lab.application import RealtimeInferenceSimulator
@@ -1093,6 +1111,7 @@ from credit_risk_lab.application import RealtimeInferenceSimulator
 realtime_limit = 5
 simulator = RealtimeInferenceSimulator(
     scorer,
+    validator=input_validator,
     min_pause_seconds=1,
     max_pause_seconds=5,
 )
@@ -1107,7 +1126,7 @@ realtime_events = simulator.stream(
 display(realtime_events)
 """
         ),
-        markdown("## 7. Realtime decision timeline"),
+        markdown("## 8. Realtime decision timeline"),
         code(
             """
 fig = px.line(
@@ -1131,6 +1150,88 @@ fig.show()
 )
 
 
+pipeline_summary = notebook(
+    "08 - CI/CD MLOps Pipeline",
+    "exécuter le pipeline training/evaluation depuis le dataset brut jusqu'aux artefacts et métriques finales utilisables en CI/CD.",
+    [
+        setup,
+        markdown("## 1. Configure pipeline run"),
+        code(
+            """
+from credit_risk_lab.application.workflows import CreditRiskMLOpsPipeline
+
+pipeline = CreditRiskMLOpsPipeline(
+    project_settings=settings,
+    optuna_trials=settings.optuna_trials,
+)
+
+print(f"Environment: {settings.environment}")
+print(f"Selection metric: {settings.selection_metric}")
+print(f"Optuna trials: {settings.optuna_trials}")
+print(f"Minimum validation ROC-AUC: {settings.minimum_validation_roc_auc}")
+print(f"Decision threshold: {settings.decision_threshold}")
+print(f"Raw dataset: {settings.raw_data_path}")
+"""
+        ),
+        markdown("## 2. Run full pipeline"),
+        code(
+            """
+pipeline_result = pipeline.run()
+"""
+        ),
+        markdown("## 3. Pipeline summary"),
+        code(
+            """
+display(pipeline_result.summary)
+"""
+        ),
+        markdown("## 4. Produced artifacts"),
+        code(
+            """
+display(pipeline_result.artifacts)
+display(pipeline_result.promotion_report)
+"""
+        ),
+        markdown("## 5. Baseline model ranking"),
+        code(
+            """
+display(pipeline_result.baseline_metrics)
+"""
+        ),
+        markdown("## 6. Tuned CatBoost validation metrics"),
+        code(
+            """
+display(pipeline_result.tuned_metrics)
+"""
+        ),
+        markdown("## 7. Final untouched test metrics"),
+        code(
+            """
+display(pipeline_result.final_metrics)
+"""
+        ),
+        markdown("## 8. Business diagnostics"),
+        code(
+            """
+display(pipeline_result.threshold_grid)
+display(pipeline_result.lift_gain.head(10))
+display(pipeline_result.confidence_intervals.round(4))
+"""
+        ),
+        markdown("## 9. Governance diagnostics"),
+        code(
+            """
+print("Calibration")
+display(pipeline_result.calibration.round(4))
+
+print("Fairness diagnostics")
+display(pipeline_result.fairness)
+"""
+        ),
+    ],
+)
+
+
 NOTEBOOKS = {
     "01_data_understanding.ipynb": data_understanding,
     "02_data_quality.ipynb": data_quality,
@@ -1139,6 +1240,7 @@ NOTEBOOKS = {
     "05_hyperparameter_tuning.ipynb": tuning,
     "06_model_evaluation_and_persistence.ipynb": evaluation,
     "07_batch_and_realtime_inference.ipynb": inference,
+    "08_end_to_end_mlops_pipeline.ipynb": pipeline_summary,
 }
 
 

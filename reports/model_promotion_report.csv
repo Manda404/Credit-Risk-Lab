@@ -1,0 +1,2 @@
+promotion_status,promotion_reason,gate_metric,gate_value,gate_threshold,candidate_bundle_path,promoted_bundle_path,reported_external_test_roc_auc,reported_external_test_pr_auc
+rejected,validation_roc_auc 0.974814 < 0.999000,validation_roc_auc,0.9748141680337267,0.999,/Users/surelmanda/3-Mlops-Databricks-Projects/Clean-Architecture-MLops/Credit-Risk-Lab/models/candidates/candidate_model.joblib,,0.9753991428571428,0.9300734100647237

@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     validation_size: float = 0.20
 
     selection_metric: str = "roc_auc"
+    optuna_trials: int = Field(default=50, ge=1)
+    minimum_validation_roc_auc: float = Field(default=0.98, ge=0.0, le=1.0)
     split_strategy: str = "random_experimental"
     decision_date_column: str | None = None
     borrower_id_column: str | None = None
@@ -95,6 +97,7 @@ class Settings(BaseSettings):
     raw_data_encoding: str = "utf-8"
     raw_train_file: str = "train.csv"
     raw_test_file: str = "test.csv"
+    raw_split_manifest_file: str = "split_manifest.json"
     modeling_dataset_file: str = "modeling_dataset.csv"
     train_file: str = "train.csv"
     validation_file: str = "validation.csv"
@@ -102,6 +105,7 @@ class Settings(BaseSettings):
     preprocessing_artifact_file: str = "credit_risk_preprocessor.joblib"
 
     model_bundle_file: str = "best_boosting_model.joblib"
+    candidate_model_bundle_file: str = "candidates/candidate_model.joblib"
     metrics_report_file: str = "boosting_model_metrics.csv"
     models_config_file: str = "models.yaml"
     drift_report_file: str = "deployment_split_drift.csv"
@@ -173,6 +177,10 @@ class Settings(BaseSettings):
         return self.raw_dir / self.raw_test_file
 
     @property
+    def raw_split_manifest_path(self) -> Path:
+        return self.raw_dir / self.raw_split_manifest_file
+
+    @property
     def modeling_dataset_path(self) -> Path:
         return self.processed_dir / self.modeling_dataset_file
 
@@ -196,6 +204,10 @@ class Settings(BaseSettings):
     @property
     def model_bundle_path(self) -> Path:
         return self.models_dir / self.model_bundle_file
+
+    @property
+    def candidate_model_bundle_path(self) -> Path:
+        return self.models_dir / self.candidate_model_bundle_file
 
     @property
     def metrics_report_path(self) -> Path:

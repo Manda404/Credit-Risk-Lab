@@ -36,8 +36,12 @@ def test_staging_and_production_artifacts_are_isolated(monkeypatch):
 def test_environment_variables_keep_highest_priority(monkeypatch):
     monkeypatch.setenv("CRL_ENVIRONMENT", "staging")
     monkeypatch.setenv("CRL_DECISION_THRESHOLD", "0.33")
+    monkeypatch.setenv("CRL_OPTUNA_TRIALS", "3")
+    monkeypatch.setenv("CRL_MINIMUM_VALIDATION_ROC_AUC", "0.97")
 
     settings = Settings(_env_file=None)
 
     assert settings.environment == "staging"
     assert settings.decision_threshold == 0.33
+    assert settings.optuna_trials == 3
+    assert settings.minimum_validation_roc_auc == 0.97

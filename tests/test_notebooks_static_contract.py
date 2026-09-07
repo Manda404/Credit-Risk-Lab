@@ -51,6 +51,7 @@ def test_notebooks_import_package_components_explicitly():
         "CreditRiskModelEvaluator",
         "JoblibModelBundleRepository",
         "RawLoanScorer",
+        "CreditRiskMLOpsPipeline",
     }
     source = "\n".join(
         cell for path in DEV.glob("*.ipynb") for cell in notebook_code_cells(path)

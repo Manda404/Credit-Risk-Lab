@@ -60,6 +60,7 @@ Ce repository met en avant une demarche complete de ML Engineering :
   deciles, intervalle de confiance bootstrap, calibration, fairness diagnostics.
 - Bundle modele + preprocessor pour inference reproductible.
 - API FastAPI et simulation de prediction.
+- Pipeline end-to-end rejouable en une seule classe Python.
 - Tests unitaires et formatage pour securiser les changements.
 
 ## Architecture
@@ -194,6 +195,20 @@ Objectif :
 - logger chaque prediction temps reel ;
 - verifier que le seuil de decision versionne est bien applique.
 
+### 8. CI/CD MLOps Pipeline
+
+Notebook : `dev/08_end_to_end_mlops_pipeline.ipynb`
+
+Objectif :
+
+- executer le pipeline complet avec `CreditRiskMLOpsPipeline` ;
+- rejouer lecture, split, qualite, drift, feature engineering et preprocessing ;
+- entrainer les baselines et optimiser CatBoost ;
+- evaluer le modele final sur le test untouched ;
+- generer les rapports metier et les artefacts modele ;
+- rester compatible avec une execution CI/CD ;
+- retourner un resume compact des artefacts et metriques.
+
 ## Strategie Modele
 
 La selection suit une logique realiste :
@@ -226,6 +241,8 @@ Le projet contient plusieurs garde-fous MLOps :
 | Dependances | `poetry.lock` versionne |
 | Configuration | `configs/settings.yaml` et `configs/models.yaml` |
 | Environnements | `configs/environments/development.yaml`, `staging.yaml`, `production.yaml` |
+| Tuning | `optuna_trials` centralise et surchargeable via `CRL_OPTUNA_TRIALS` |
+| Promotion | `minimum_validation_roc_auc` controle le gate avant promotion du modele |
 | Randomness | `random_state` centralise |
 | Donnees | separation `data/raw` et `data/processed` |
 | Test untouched | test charge uniquement en evaluation finale |
@@ -250,10 +267,12 @@ data/processed/
   credit_risk_preprocessor.joblib
 
 models/
-  best_boosting_model.joblib # bundle modele final
+  candidates/candidate_model.joblib
+  best_boosting_model.joblib # bundle promu si le quality gate passe
 
 reports/
   boosting_model_metrics.csv
+  model_promotion_report.csv
   deployment_split_drift.csv
   deployment_split_drift.html
 ```
